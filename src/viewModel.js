@@ -201,20 +201,78 @@ export function createViewModel({ camera, scene, shirt, cuff, skin, layer }) {
   fiber.visible = false;
   group.add(fiber);
 
-  // The rugged axe gripped upright by its haft, stone head standing up out of the
-  // fist and tipped out past the knuckles. The punch drives the whole hand at the
-  // target, so the upright head is what leads — a chop, not a poke.
+  // The rugged axe stands on a pivot that undoes the hand group's quarter turn, so
+  // everything under it is set in plain camera axes: x right, y up, z toward the eye.
+  // The axe sits out to the right of the fist and a little low, and it leans forward so
+  // the stone head overhangs the view. The roll puts the bit across to the right, which
+  // turns the flat of the head toward the eye: at a quarter turn the head was edge-on
+  // and read as a grey knob on a staff instead of a broad stone blade.
+  const ruggedAxePivot = new THREE.Group();
+  ruggedAxePivot.rotation.set(-0.05, -0.28, Math.PI / 2 - 0.04);
+  group.add(ruggedAxePivot);
   const ruggedAxe = createRuggedAxe();
   ruggedAxe.scale.setScalar(1.35);
-  ruggedAxe.position.set(-0.02, -0.15, 0.01);
-  ruggedAxe.rotation.set(-0.2, -1.27, 0.1);
+  ruggedAxe.position.set(-0.06, -0.03, 0.01);
+  // The two x terms are the same axis, so the second one pitches the whole axe forward
+  // about its grip — the head leans down the view — instead of twisting the haft.
+  ruggedAxe.rotation.set(-Math.PI / 2 - 0.35, 0, -1.15);
   ruggedAxe.visible = false;
-  group.add(ruggedAxe);
+  ruggedAxePivot.add(ruggedAxe);
 
+  // Attack arcs. A held tool ridden only by the punch pose reads as the hand moving
+  // and the tool sliding along with it; an arc adds rotation and a little travel to
+  // that tool itself, so the weapon is what swings. Each entry keeps the idle
+  // transform it was registered with and has it re-applied every frame, which is what
+  // makes the hold come back exactly when the arc ends — and what keeps a tool that
+  // is swapped in mid-swing from inheriting the last one's pose.
+  const swingArcs = [];
+  function addSwingArc(object, arc) {
+    swingArcs.push({
+      object,
+      basePosition: object.position.clone(),
+      baseRotation: object.rotation.clone(),
+      baseScale: object.scale.x,
+      arc,
+    });
+  }
+
+  // Put every registered tool back on its idle transform, then let the arc for
+  // whatever the punch is driving add itself on top. A zero pose writes nothing, so
+  // the idle hold is restored to the bit rather than merely approached.
+  function poseHeldTools(out, cock) {
+    for (const entry of swingArcs) {
+      const { object } = entry;
+      object.position.copy(entry.basePosition);
+      object.rotation.copy(entry.baseRotation);
+      object.scale.setScalar(entry.baseScale);
+      if (out > 0 || cock > 0) entry.arc(object, out, cock);
+    }
+  }
+
+  // The axe chop. Angles are in the same camera-aligned frame as the hold (x right,
+  // y up, z toward the eye) and all of them turn about the model's origin — the grip
+  // — so the stone head at the far end of the haft travels several times as far as
+  // the hand. The wind-up tips the head back over the shoulder; the drive pitches it
+  // forward and down, yaws the haft over to the left and rolls the bit through the
+  // cut, so the head comes down and across rather than straight down.
+  // The grip follows a little in every axis, so the swing has weight without the arm
+  // being redrawn.
+  addSwingArc(ruggedAxe, (axe, out, cock) => {
+    axe.rotation.x += 0.45 * cock - 1.35 * out;
+    axe.rotation.y += -0.18 * cock - 0.3 * out;
+    axe.rotation.z += 0.55 * out;
+    axe.position.x -= 0.06 * out;
+    axe.position.y += 0.03 * cock - 0.085 * out;
+    axe.position.z += 0.06 * cock - 0.14 * out;
+  });
+
+  // The hand group itself is rolled a quarter turn, so the firepit takes the opposite
+  // roll to cancel it: the ring and its crossed logs then face upwards, the way a fire
+  // set on the ground sits, instead of tipping its wood at the player's face.
   const campfire = createCampfire();
   campfire.scale.setScalar(0.5);
   campfire.position.set(-0.01, -0.1, -0.06);
-  campfire.rotation.set(1.1, 0.3, 0);
+  campfire.rotation.set(0, 0, Math.PI / 2);
   campfire.visible = false;
   group.add(campfire);
 
@@ -273,6 +331,7 @@ export function createViewModel({ camera, scene, shirt, cuff, skin, layer }) {
     crumbPool.push({
       mesh,
       ttl: CRUMB_LIFE,
+      size,
       vel: new THREE.Vector3(
         0.08 + Math.random() * 0.16,
         0.05 + Math.random() * 0.14,
@@ -306,7 +365,7 @@ export function createViewModel({ camera, scene, shirt, cuff, skin, layer }) {
       // Shrinking to nothing over the tail of the life, so crumbs vanish into the
       // ground instead of winking out mid-air.
       const fade = Math.min(1, crumb.ttl / (CRUMB_LIFE * 0.45));
-      crumb.mesh.scale.setScalar(0.016 * fade + 0.01 * Math.min(1, crumb.ttl));
+      crumb.mesh.scale.setScalar(crumb.size * fade);
     }
   }
 
@@ -413,6 +472,12 @@ export function createViewModel({ camera, scene, shirt, cuff, skin, layer }) {
       group.rotation.y += -0.26 * out + 0.26 * cock;
       group.rotation.z += -0.05 * out + 0.10 * cock;
     }
+
+    // Tool swing, on the same curve as the fist: one dt-driven clock in the player, so
+    // a hit lands when the axe is at full stretch, mashing can't outrun the animation,
+    // and an interrupted swing (a menu, death, a swap) simply reports no pose and the
+    // arc collapses back onto the idle hold.
+    poseHeldTools(pose.out ?? 0, pose.cock ?? 0);
 
     // Casting: draw the rod up and back with the power bar, then whip it forward on
     // release. The snap overshoots the rest angle and pushes the grip out, so the
