@@ -33,7 +33,7 @@
             "npx",
             "-y",
             "@modelcontextprotocol/server-filesystem",
-            "/home/purexdev/mcp-game-server"
+            "."
           ]
         },
         "memory": {

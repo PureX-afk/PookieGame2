@@ -25,9 +25,10 @@ export function createFishingGame(side) {
   el.className = `catch-game ${side} hidden`;
   el.innerHTML =
     '<div class="gauge">' +
-    '<div class="gauge-water"></div>' +
+    '<div class="gauge-water">' +
     '<div class="gauge-bar"></div>' +
     '<div class="catch-fish"></div>' +
+    '</div>' +
     '</div>' +
     '<div class="progress"><div class="progress-fill"></div></div>';
   document.getElementById('stage').appendChild(el);
@@ -48,8 +49,10 @@ export function createFishingGame(side) {
   let time = 0;
 
   function render() {
-    // The gauge runs bottom-up, DOM positions run top-down.
-    barEl.style.top = `${(1 - barY) * 100}%`;
+    // The gauge runs bottom-up, DOM positions run top-down. barY is the bar's centre,
+    // so the offset by half its height keeps the whole bar inside the gauge at the
+    // top and bottom limits.
+    barEl.style.top = `${(1 - barY) * 100 - (BAR_HEIGHT * 100) / 2}%`;
     barEl.style.height = `${BAR_HEIGHT * 100}%`;
     fishEl.style.top = `${(1 - fishY) * 100}%`;
     progressEl.style.height = `${(progress * 100).toFixed(1)}%`;
@@ -74,7 +77,7 @@ export function createFishingGame(side) {
       fishTarget = 0.6;
       fishTimer = 0.6;
       progress = 0.35;
-      el.classList.remove('hidden');
+      el.classList.remove('hidden', 'on-target');
       render();
     },
 
@@ -96,7 +99,15 @@ export function createFishingGame(side) {
       const half = BAR_HEIGHT / 2;
       if (barY < half) {
         barY = half;
-        barVel = 0;
+        const impact = -barVel;
+        // Letting the bar drop onto the floor gives it a kick back up. The harder it
+        // lands, the livelier the rebound; holding the lift keeps it pinned instead.
+        if (!held && impact > 0.05) {
+          const restitution = Math.min(0.72, 0.2 + impact * 0.5);
+          barVel = impact * restitution;
+        } else {
+          barVel = 0;
+        }
       } else if (barY > 1 - half) {
         barY = 1 - half;
         barVel = 0;
@@ -124,12 +135,14 @@ export function createFishingGame(side) {
       }
 
       const covering = Math.abs(fishY - barY) < half + FISH_HEIGHT / 2;
+      el.classList.toggle('on-target', covering);
       progress += (covering ? GAIN : -LOSS) * dt;
       render();
 
       if (progress >= 1) {
+        // Stay at full progress: the fishing module keeps the finished gauge on
+        // screen through the catch celebration, then stop() hides it.
         running = false;
-        el.classList.add('hidden');
         return 'caught';
       }
       if (progress <= 0) {

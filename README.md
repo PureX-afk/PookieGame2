@@ -137,5 +137,11 @@ and uses the keys beside them:
 - **Saving and the game menu:** `\`
 - **Fire-lighting and cooking mini-games:** alternate `/` and `'`
 
+The **Settings** option on the title screen, and the in-game **Settings → Volume**
+screen, share the same audio controls: **Sound effects** and **Music** levels, the
+**Song** that is playing (left/right switches between *Beginning* and *Haggstrom*),
+and a **Shuffle** switch that picks each next song at random. Both players share all
+of it, so either panel can change what everyone hears.
+
 The game can also be played by two people on one screen, and it works with controllers.
 Both of those choices are offered on the first screen after you click play.

@@ -157,7 +157,7 @@ export function createGroundItems({ scene, blockedAt }) {
     return null;
   }
 
-  function spawn(id, spot, exact = false) {
+  function spawn(id, spot, exact = false, animate = false) {
     const mesh = makeMesh(id);
     // A stick model sits above its own origin; the fish is centred on it. A restored
     // item already carries its finished height, so it lands exactly as it was left.
@@ -166,7 +166,8 @@ export function createGroundItems({ scene, blockedAt }) {
       : id === 'fish' || id === 'cooked_fish' || id === 'burned_fish'
         ? 0.06
         : 0.02;
-    mesh.position.set(spot.x, spot.y + lift, spot.z);
+    const baseY = spot.y + lift;
+    mesh.position.set(spot.x, baseY, spot.z);
     mesh.rotation.y = Math.random() * Math.PI;
     scene.add(mesh);
 
@@ -186,8 +187,22 @@ export function createGroundItems({ scene, blockedAt }) {
       fuel: 0,
       // A fish on a spit, while one is cooking: { group, raw, cooked, time }.
       cook: null,
+      // A short landing animation for things dropped out of a falling tree.
+      dropIn: null,
       seed: Math.random() * Math.PI * 2,
     };
+
+    if (animate) {
+      mesh.position.y = baseY + 0.38;
+      mesh.scale.setScalar(0.35);
+      record.dropIn = {
+        time: 0,
+        duration: 0.28 + Math.random() * 0.14,
+        baseY,
+        height: 0.3 + Math.random() * 0.2,
+      };
+    }
+
     mesh.userData.pickable = record;
     items.push(record);
     meshes.push(mesh);
@@ -375,10 +390,14 @@ export function createGroundItems({ scene, blockedAt }) {
     pick(index, inventory) {
       const record = aimed[index];
       if (!record || record.taken) return false;
-      // A finished fish comes off the spit, burnt or not; one still cooking stays put.
+      // A finished fish comes off the spit, burnt or not. One still over live coals is
+      // still cooking and stays put — but one left on a fire that has gone out comes
+      // back raw rather than being stuck on cold stones forever.
       if (record.cook) {
-        if (record.cook.time < COOK_TIME) return false;
-        if (!inventory.add(record.cook.burned ? 'burned_fish' : 'cooked_fish')) return false;
+        const done = record.cook.time >= COOK_TIME;
+        if (!done && record.lit) return false;
+        const take = record.cook.burned ? 'burned_fish' : done ? 'cooked_fish' : 'fish';
+        if (!inventory.add(take)) return false;
         record.mesh.remove(record.cook.group);
         record.cook = null;
         aimed[index] = null;
@@ -424,10 +443,10 @@ export function createGroundItems({ scene, blockedAt }) {
     },
 
     // Put an item on the ground near a point. False when there's nowhere dry.
-    drop(id, x, z) {
+    drop(id, x, z, animate = false) {
       const spot = nearbySpot(x, z);
       if (!spot) return false;
-      return spawn(id, spot);
+      return spawn(id, spot, false, animate);
     },
 
     // Can something go down here? Dry, walkable ground, clear of everything already
@@ -447,6 +466,9 @@ export function createGroundItems({ scene, blockedAt }) {
 
     // Set an item down on an exact spot, rather than somewhere near a point.
     place(id, x, z, yaw = 0) {
+      // The same clearance rule a drop follows: nothing is set down on top of something
+      // else, however it got here — including a fish landed by a player with a full bag.
+      if (!this.canPlace(id, x, z)) return false;
       const y = dryHeight(x, z, DROP_MIN_HEIGHT);
       if (y === null) return false;
       const record = spawn(id, { x, z, y });
@@ -490,6 +512,12 @@ export function createGroundItems({ scene, blockedAt }) {
       preview.mesh.visible = true;
       preview.mesh.position.set(x, heightAt(x, z) + 0.02, z);
       preview.mesh.rotation.y = yaw;
+    },
+
+    // The cold campfire player `index` is looking at, whatever is in hand.
+    coldFire(index) {
+      const record = aimed[index];
+      return record && !record.taken && record.fire && !record.lit ? record : null;
     },
 
     // The cold campfire player `index` is looking at, provided they have kindling in
@@ -540,7 +568,9 @@ export function createGroundItems({ scene, blockedAt }) {
     // can be cooked by hand. Quiet once the fish is done, so it can't be picked up again.
     cookGameTarget(index) {
       const record = aimed[index];
-      if (!record || record.taken || !record.cook) return null;
+      // A fire that has burned out is only cold stones: the fish left on the spit is
+      // not taken in hand over dead coals.
+      if (!record || record.taken || !record.cook || !record.lit) return null;
       return record.cook.time < COOK_TIME ? record : null;
     },
 
@@ -575,6 +605,19 @@ export function createGroundItems({ scene, blockedAt }) {
       time += dt;
       for (const record of items) {
         if (record.taken) continue;
+        if (record.dropIn) {
+          const drop = record.dropIn;
+          drop.time += dt;
+          const k = Math.min(drop.time / drop.duration, 1);
+          const eased = 1 - (1 - k) ** 3;
+          record.mesh.scale.setScalar(0.35 + 0.65 * eased);
+          record.mesh.position.y = drop.baseY + (1 - eased) * drop.height;
+          if (k >= 1) {
+            record.mesh.scale.setScalar(1);
+            record.mesh.position.y = drop.baseY;
+            record.dropIn = null;
+          }
+        }
         // The spit stays where it was planted; only the clock runs, and the fish
         // browns when it is done. A fish someone is cooking by hand runs on their
         // clock instead, so the fire leaves it alone here.
@@ -621,7 +664,8 @@ export function createGroundItems({ scene, blockedAt }) {
         .map((record) => ({
           id: record.id,
           x: record.mesh.position.x,
-          y: record.mesh.position.y,
+          // A log still landing is saved at its resting height, not mid-bob.
+          y: record.dropIn ? record.dropIn.baseY : record.mesh.position.y,
           z: record.mesh.position.z,
           rotation: record.mesh.rotation.y,
           lit: record.lit,

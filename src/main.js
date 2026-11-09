@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { PALETTE } from './palette.js';
 import { LAYER } from './layers.js';
-import { createIsland } from './island.js';
+import { createIsland, surfaceAt as terrainSurfaceAt } from './island.js';
 import { createOcean } from './ocean.js';
 import { createBoat } from './boat.js';
 import { createSky } from './sky.js';
@@ -27,6 +27,8 @@ import { createTrees } from './trees.js';
 import { createLightingGame } from './lightingGame.js';
 import { createCookingGame, MANUAL_RATE, FLIP_LOSS } from './cookingGame.js';
 import { createLaunchScreen } from './launchScreen.js';
+import { createFootsteps } from './footsteps.js';
+import { createMusic } from './music.js';
 import { saveGame, readSave } from './save.js';
 import { createSettings, UI_SCALE } from './settings.js';
 
@@ -58,7 +60,7 @@ scene.add(createIsland());
 // keep clear of trunks instead of growing through them.
 const trees = createTrees({
   scene,
-  drop: (id, x, z) => groundItems.drop(id, x, z),
+  drop: (id, x, z, animate) => groundItems.drop(id, x, z, animate),
 });
 const groundItems = createGroundItems({
   scene,
@@ -76,6 +78,28 @@ scene.add(boat.group);
 // Player-facing options are per player, so the two can prefer different schemes.
 const settingsP1 = createSettings();
 const settingsP2 = createSettings();
+
+// Sound is shared by both players: one master bus, one volume. The settings panels
+// read and write it through these handles, so either player can adjust it.
+const footsteps = createFootsteps();
+const music = createMusic();
+const gameVolume = {
+  get: () => footsteps.volume,
+  set: (value) => {
+    footsteps.setVolume(value);
+    // Both panels show the same shared level, so refresh whichever is open.
+    settingsPanelP1.refreshAudio();
+    settingsPanelP2.refreshAudio();
+  },
+};
+const gameMusicVolume = {
+  get: () => music.volume,
+  set: (value) => {
+    music.setVolume(value);
+    settingsPanelP1.refreshAudio();
+    settingsPanelP2.refreshAudio();
+  },
+};
 
 // Spawn on the beach. "shore" looks along the waterline so the first frame has
 // sand, sea, sky and the green slope all in it.
@@ -161,7 +185,13 @@ const fishing1 = createFishing({
   scene,
   ocean,
   rumble: (strong, weak, ms) => input.rumble(0, strong, weak, ms),
-  onCatch: () => landFish(0),
+  // The whoosh and the bite chirp lean toward the side of the angler who hears them.
+  onCast: () => footsteps.effect('cast', { pan: -0.3 }),
+  onBite: () => footsteps.effect('bite', { pan: -0.3 }),
+  onCatch: () => {
+    landFish(0);
+    celebrateCatch(0);
+  },
   // A cast that actually reaches water spends one of the rod's fifty uses.
   onUse: () => {
     inventory1.wear('fishing_rod', 1);
@@ -175,7 +205,12 @@ const fishing2 = createFishing({
   scene,
   ocean,
   rumble: (strong, weak, ms) => input.rumble(1, strong, weak, ms),
-  onCatch: () => landFish(1),
+  onCast: () => footsteps.effect('cast', { pan: 0.3 }),
+  onBite: () => footsteps.effect('bite', { pan: 0.3 }),
+  onCatch: () => {
+    landFish(1);
+    celebrateCatch(1);
+  },
   onUse: () => {
     inventory2.wear('fishing_rod', 1);
     syncHeld();
@@ -186,11 +221,24 @@ const settingsPanelP1 = createSettingsPanel({
   settings: settingsP1,
   side: 'left',
   onSave: saveAndExit,
+  volume: gameVolume,
+  musicVolume: gameMusicVolume,
+  music,
 });
 const settingsPanelP2 = createSettingsPanel({
   settings: settingsP2,
   side: 'right',
   onSave: saveAndExit,
+  volume: gameVolume,
+  musicVolume: gameMusicVolume,
+  music,
+});
+
+// A song that ends (or a shuffled pick) changes the Song row of whichever panel is
+// open, so both redraw from the one shared player.
+music.onChange(() => {
+  settingsPanelP1.refreshAudio();
+  settingsPanelP2.refreshAudio();
 });
 
 const underwater1 = createUnderwaterOverlay('left');
@@ -211,6 +259,46 @@ const lastPos = [
   { x: p1.position.x, z: p1.position.z },
   { x: p2.position.x, z: p2.position.z },
 ];
+
+// Footsteps follow the walk cycle: a leg reaches the front of its swing at a quarter
+// turn, which is where its heel lands, so the beats sit on the stride's peaks
+// (π/2, 3π/2, ...) rather than the crossings between them. Each player keeps their
+// own phase and which foot is due next, and both are left alone while airborne,
+// swimming, wading, or standing still.
+const footStepPhase = (player) => Math.floor(player.gait / Math.PI + 0.5);
+const footTracks = [
+  { phase: footStepPhase(p1), foot: 0, lastStep: -Infinity },
+  { phase: footStepPhase(p2), foot: 0, lastStep: -Infinity },
+];
+function updateFootsteps() {
+  const now = performance.now() / 1000;
+  [p1, p2].forEach((player, index) => {
+    const track = footTracks[index];
+    const phase = footStepPhase(player);
+    if (phase === track.phase) return;
+    const advanced = phase > track.phase;
+    track.phase = phase;
+    // A respawn rewinds the stride; adopt the new phase without stamping a step.
+    if (!advanced) {
+      track.foot = 0;
+      return;
+    }
+    const foot = track.foot;
+    track.foot = 1 - track.foot;
+    if (!player.moving || !player.grounded || player.swimming) return;
+    const surface = terrainSurfaceAt(player.position.x, player.position.z);
+    if (!surface) return;
+    // Safety net for a dropped frame or a stride jump: never fire two steps at once.
+    // The stride cap in player.js keeps a sprint under this gap.
+    if (now - track.lastStep < 0.15) return;
+    track.lastStep = now;
+    footsteps.step(surface, {
+      sprint: player.sprintActive,
+      // The right leg reaches forward first, so its foot starts on the right.
+      pan: foot ? -0.18 : 0.18,
+    });
+  });
+}
 const inventory1 = createInventory('left');
 const inventory2 = createInventory('right');
 // The crafting panels read their owner's bag, so they're built after the inventories.
@@ -268,8 +356,8 @@ const EAT_HOLD = 1.0;
 // slots or drop to a different thing in hand and the clock is thrown away, not
 // banked for later.
 const eaten = [
-  { id: null, time: 0 },
-  { id: null, time: 0 },
+  { id: null, slot: -1, time: 0 },
+  { id: null, slot: -1, time: 0 },
 ];
 
 // The spot a player would set their held item down on: straight ahead, at the distance
@@ -317,7 +405,9 @@ function landFish(index) {
     return;
   }
   const at = (index === 0 ? p1 : p2).position;
-  if (groundItems.drop('fish', at.x, at.z)) return;
+  // Set down where the angler stands, if that spot is dry and clear: the same
+  // clearance rule a drop follows, so a catch can't land inside a fire.
+  if (groundItems.place('fish', at.x, at.z)) return;
   // Fishing from deep water: a few steps out to find the nearest dry beach.
   for (let radius = 2; radius <= 6; radius += 2) {
     for (let step = 0; step < 8; step++) {
@@ -327,6 +417,34 @@ function landFish(index) {
       if (groundItems.place('fish', x, z)) return;
     }
   }
+}
+
+// A catch gets a short celebration before the fish leaps: the jingle plays, the
+// catcher's HUD rims go green, and a Success! banner pops for a beat.
+const CATCH_CELEBRATION = 1;
+const catchBanner = document.createElement('div');
+catchBanner.className = 'catch-success';
+catchBanner.textContent = 'Success!';
+document.getElementById('stage').appendChild(catchBanner);
+
+let catchFlashTimer = 0;
+function celebrateCatch(index) {
+  footsteps.effect('jingle', { pan: index === 0 ? -0.25 : 0.25 });
+
+  stage.classList.remove('catch-flash-left', 'catch-flash-right');
+  stage.classList.add(index === 0 ? 'catch-flash-left' : 'catch-flash-right');
+
+  catchBanner.classList.remove('left', 'right', 'show');
+  catchBanner.classList.add(index === 0 ? 'left' : 'right');
+  // Restart the pop if two catches land close together.
+  void catchBanner.offsetWidth;
+  catchBanner.classList.add('show');
+
+  clearTimeout(catchFlashTimer);
+  catchFlashTimer = window.setTimeout(() => {
+    stage.classList.remove('catch-flash-left', 'catch-flash-right');
+    catchBanner.classList.remove('show', 'left', 'right');
+  }, CATCH_CELEBRATION * 1000);
 }
 
 // The hand-cooking game is over, however it ended: whatever time is left goes back to
@@ -436,6 +554,11 @@ function captureState() {
     players: input.players,
     device: input.device,
     time: sky.seconds,
+    volume: footsteps.volume,
+    musicVolume: music.volume,
+    // The shared playlist: which song is picked and whether it shuffles.
+    musicTrack: music.trackTitle,
+    musicShuffle: music.shuffle,
     settings: [settingsP1, settingsP2].map((settings) => ({
       sprintMode: settings.sprintMode,
       uiSize: settings.uiSize,
@@ -471,6 +594,10 @@ function applyState(state) {
   if (!state) return;
   playTime = Number.isFinite(state.playTime) ? state.playTime : 0;
   if (Number.isFinite(state.time)) sky.setTime(state.time);
+  if (Number.isFinite(state.volume)) gameVolume.set(state.volume);
+  if (Number.isFinite(state.musicVolume)) gameMusicVolume.set(state.musicVolume);
+  if (typeof state.musicTrack === 'string') music.selectTrack(state.musicTrack);
+  if (typeof state.musicShuffle === 'boolean') music.setShuffle(state.musicShuffle);
 
   [settingsP1, settingsP2].forEach((settings, i) => {
     const saved = state.settings && state.settings[i];
@@ -520,6 +647,19 @@ function saveAndExit() {
   craftingMenuP2.setOpen(false);
   systemMenuP1.setOpen(false);
   systemMenuP2.setOpen(false);
+  // Whatever was in progress is put down with the session: a cast left out would
+  // otherwise hang over the title screen, and a fire's mini-game would still be
+  // open behind the menu.
+  interruptFireWork(0);
+  interruptFireWork(1);
+  fishing1.reset();
+  fishing2.reset();
+  hand1.setEating(0);
+  hand2.setEating(0);
+  music.stop();
+  clearTimeout(catchFlashTimer);
+  stage.classList.remove('catch-flash-left', 'catch-flash-right');
+  catchBanner.classList.remove('show', 'left', 'right');
   running = false;
   // Back to the menu means back out of the game: the stage leaves the page along with
   // the pointer capture.
@@ -540,6 +680,9 @@ function startGame({ players, device, state }) {
   startedOnce = true;
 
   input.configure({ players, device });
+  // This runs inside the click or key press that chose the session, which is the
+  // gesture browsers require before audio is allowed to play.
+  footsteps.unlock();
   stage.classList.remove('menu');
   // The launch screen's button may still hold focus, and player two's jump is Enter:
   // without this, the first jump would also click the button that started the game.
@@ -571,6 +714,7 @@ function startGame({ players, device, state }) {
   hand2.setEating(0);
   for (const track of eaten) {
     track.id = null;
+    track.slot = -1;
     track.time = 0;
   }
 
@@ -584,12 +728,20 @@ function startGame({ players, device, state }) {
     lastPos[i].z = player.position.z;
   }
 
+  // The music starts only after the save has been applied, so Continue opens on the
+  // saved song instead of switching tracks a moment into the first one. It is still
+  // inside the click or key press that started the session, which is the gesture the
+  // browser needs before audio may play.
+  music.unlock();
   running = true;
 }
 
 const launch = createLaunchScreen({
   onStart: startGame,
   loadSave: readSave,
+  volume: gameVolume,
+  musicVolume: gameMusicVolume,
+  music,
 });
 
 // Capturing the pointer can be refused (a very recent Esc, a browser prompt); a
@@ -648,6 +800,9 @@ function frame() {
     // a confirmation of whatever row it was sitting on.
     systemMenuP1.setOpen(false);
     interruptFireWork(0);
+    // A cast left out comes home too: a dead player can't reel it in, and the frozen
+    // trigger would otherwise land it and spend a use of the rod behind the screen.
+    fishing1.reset();
     deathScreen1.show();
   }
   if (!deathScreen2.isOpen && health2.dead) {
@@ -655,6 +810,7 @@ function frame() {
     craftingMenuP2.setOpen(false);
     systemMenuP2.setOpen(false);
     interruptFireWork(1);
+    fishing2.reset();
     deathScreen2.show();
   }
 
@@ -678,6 +834,19 @@ function frame() {
 
   const dead1 = deathScreen1.isOpen;
   const dead2 = deathScreen2.isOpen;
+
+  // A menu takes the player's hands, so a fire they were working at is put down
+  // first: the minigame and a panel must never be open together, or the hidden game
+  // keeps taking the trigger presses that the frozen controls leave alive.
+  if (!dead1 && (controls1.pausePressed || controls1.craftPressed || controls1.guidePressed)) {
+    interruptFireWork(0);
+    // A fish on the line is two hands as well: frozen hands would only let it escape.
+    if (fishing1.state === 'catching') fishing1.reset();
+  }
+  if (!dead2 && (controls2.pausePressed || controls2.craftPressed || controls2.guidePressed)) {
+    interruptFireWork(1);
+    if (fishing2.state === 'catching') fishing2.reset();
+  }
 
   // Start opens that player's own settings panel. Nothing freezes, so the other
   // player keeps playing and only the opener's settings change.
@@ -730,8 +899,12 @@ function frame() {
   const menu2 = settingsPanelP2.isOpen;
   if (menu1 && controls1.navUp) settingsPanelP1.moveFocus(-1);
   if (menu1 && controls1.navDown) settingsPanelP1.moveFocus(1);
+  if (menu1 && controls1.navLeft) settingsPanelP1.adjust(-1);
+  if (menu1 && controls1.navRight) settingsPanelP1.adjust(1);
   if (menu2 && controls2.navUp) settingsPanelP2.moveFocus(-1);
   if (menu2 && controls2.navDown) settingsPanelP2.moveFocus(1);
+  if (menu2 && controls2.navLeft) settingsPanelP2.adjust(-1);
+  if (menu2 && controls2.navRight) settingsPanelP2.adjust(1);
   if (menu1 && controls1.jumpPressed) settingsPanelP1.activate();
   if (menu2 && controls2.jumpPressed) settingsPanelP2.activate();
 
@@ -882,6 +1055,7 @@ function frame() {
   // Sprinting dies with the bar: each body runs on what its own belly still holds.
   p1.update(dt, c1, hunger1.hunger > 0);
   p2.update(dt, c2, hunger2.hunger > 0);
+  updateFootsteps();
   rig1.update(dt);
   rig2.update(dt);
   // Aiming: ground items and trees each raycast for their nearest target, and the
@@ -902,8 +1076,16 @@ function frame() {
       trees.clearAim(i);
     }
   }
-  crosshair1.setLabel(labels[0], pressKey(0, inventory1));
-  crosshair2.setLabel(labels[1], pressKey(1, inventory2));
+  const keys = [pressKey(0, inventory1), pressKey(1, inventory2)];
+  // An unlit fire in an empty hand says what X does; with kindling in hand the badge
+  // is RT instead and the name stays plain.
+  for (let i = 0; i < 2; i++) {
+    if (keys[i] === 'X' && groundItems.coldFire(i)) {
+      labels[i] = `${labels[i]} · pick up with X`;
+    }
+  }
+  crosshair1.setLabel(labels[0], keys[0]);
+  crosshair2.setLabel(labels[1], keys[1]);
 
   // A swing that actually started is a swing: the fist connects partway through the
   // third-second animation, and that is the frame the tree or bush takes its hit. Driving
@@ -986,6 +1168,14 @@ function frame() {
       endCooking(index, record);
       continue;
     }
+    // The fire can burn out under the player's hands. A dead fire is not something to
+    // lean over, so the fish goes back to it and the view eases out of the zoom — the
+    // same rule that keeps a cold fire from being lit or picked at.
+    if (!record.lit) {
+      cooking.stop();
+      endCooking(index, record);
+      continue;
+    }
     const done = groundItems.advanceCook(record, dt * MANUAL_RATE);
     const result = cooking.update(dt, index === 0 ? c1 : c2);
     if (result === 'flip') groundItems.flipFish(record);
@@ -1022,12 +1212,14 @@ function frame() {
     const item = inventory.item;
     if (!item || !(item.hunger > 0) || !controls.useHeld || !canEat[index]) {
       track.id = null;
+      track.slot = -1;
       track.time = 0;
     } else {
       // A different thing in hand (the item was eaten down to nothing, or the player
       // stepped slots) starts the hold over rather than topping the old one up.
-      if (track.id !== item.id) {
+      if (track.id !== item.id || track.slot !== inventory.selected) {
         track.id = item.id;
+        track.slot = inventory.selected;
         track.time = 0;
       }
       track.time += dt;
@@ -1036,6 +1228,7 @@ function frame() {
         hunger.feed(item.hunger);
         syncHeld();
         track.id = null;
+        track.slot = -1;
         track.time = 0;
       }
     }
@@ -1093,6 +1286,7 @@ requestAnimationFrame(frame);
 window.__game = {
   renderer,
   scene,
+  ocean,
   players: [p1, p2],
   rigs: [rig1, rig2],
   hands: [hand1, hand2],
@@ -1112,5 +1306,7 @@ window.__game = {
   inventory: [inventory1, inventory2],
   settings: [settingsP1, settingsP2],
   deathScreens: [deathScreen1, deathScreen2],
+  footsteps,
+  music,
   input,
 };

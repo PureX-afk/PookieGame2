@@ -12,6 +12,9 @@ const CHARGE_PERIOD = 1.5; // one full left-to-right-to-left sweep
 const FLIGHT_TIME = 0.75;
 const RETURN_TIME = 0.45;
 const LAND_LINGER = 0.3;
+// A beat of celebration before the caught fish leaps: the jingle and the green HUD
+// flash run through this pause, then the fish comes to the angler.
+export const CAUGHT_PAUSE = 0.55;
 const GRAVITY = 18;
 // How long a float sits on the water before something takes an interest.
 const BITE_MIN = 2;
@@ -24,7 +27,18 @@ const CAP = new THREE.CylinderGeometry(0.075, 0.075, 0.07, 8);
 // Casts leave from the tip of the first-person rod, which is the rod the owner is
 // actually looking at. The body's rod is scaled and angled to reach the same spot, so
 // the other player sees the line leave the rod in the caster's hand.
-export function createFishing({ side, player, hand, scene, ocean, rumble, onCatch, onUse }) {
+export function createFishing({
+  side,
+  player,
+  hand,
+  scene,
+  ocean,
+  rumble,
+  onCast,
+  onBite,
+  onCatch,
+  onUse,
+}) {
   // Power bar, docked on that player's half.
   const bar = document.createElement('div');
   bar.className = `cast ${side} hidden`;
@@ -76,7 +90,7 @@ export function createFishing({ side, player, hand, scene, ocean, rumble, onCatc
   caughtFish.visible = false;
   scene.add(caughtFish);
 
-  let state = 'idle'; // idle | charging | flying | bobbing | catching | missed | returning
+  let state = 'idle'; // idle | charging | flying | bobbing | catching | caughtPause | missed | returning
   let chargeTime = 0;
   let power = 0;
   let flight = 0;
@@ -84,6 +98,7 @@ export function createFishing({ side, player, hand, scene, ocean, rumble, onCatc
   let returnTime = 0;
   let bobTime = 0;
   let biteTimer = 0;
+  let catchPause = 0;
   let bitten = false;
   let floatX = 0;
   let floatZ = 0;
@@ -101,7 +116,7 @@ export function createFishing({ side, player, hand, scene, ocean, rumble, onCatc
 
   // Caught-fish leap: a short arc that breaks the surface at the float and flies at
   // the angler, shrinking out of existence as it arrives.
-  const LEAP_TIME = 0.85;
+  const LEAP_TIME = 1;
   const LEAP_HEIGHT = 1.9;
   const leapFrom = new THREE.Vector3();
   const leapTo = new THREE.Vector3();
@@ -125,12 +140,12 @@ export function createFishing({ side, player, hand, scene, ocean, rumble, onCatc
 
   function startLeap() {
     leapFrom.copy(group.position);
-    // Aim the whole throw at the angler, not just a small hop: the fish is cancelled
-    // with a quick shrink as it reaches them.
+    // Aim the whole throw at the angler, a little in front of their chest so the
+    // fish is visibly caught in view instead of vanishing inside the camera.
     leapTo.set(
-      player.position.x,
+      player.position.x + Math.sin(player.yaw) * 0.6,
       player.position.y + 1.1,
-      player.position.z
+      player.position.z + Math.cos(player.yaw) * 0.6
     );
     leapTime = 0;
     caughtFish.visible = true;
@@ -143,13 +158,17 @@ export function createFishing({ side, player, hand, scene, ocean, rumble, onCatc
     const k = Math.min(leapTime / LEAP_TIME, 1);
     leapPoint(k, leapPos);
     caughtFish.position.copy(leapPos);
-    // Point the head along the arc, then let it flop around its own axis.
+    // Point the head along the arc, then let it flop around its own axis. The fish
+    // model runs along -Z, so lookAt (which aims +Z) needs a half turn.
     leapPoint(Math.min(1, k + 0.04), leapAhead);
-    if (leapAhead.distanceToSquared(leapPos) > 1e-6) caughtFish.lookAt(leapAhead);
+    if (leapAhead.distanceToSquared(leapPos) > 1e-6) {
+      caughtFish.lookAt(leapAhead);
+      caughtFish.rotateY(Math.PI);
+    }
     caughtFish.rotateZ(Math.sin(leapTime * 18) * 0.35);
-    // Shrink out over the last quarter of the flight so the catch ends cleanly
+    // Shrink out over the last fraction of the flight so the catch ends cleanly
     // instead of the fish popping away at full size.
-    const shrink = k < 0.75 ? 1 : Math.max(0, 1 - (k - 0.75) / 0.25);
+    const shrink = k < 0.85 ? 1 : Math.max(0, 1 - (k - 0.85) / 0.15);
     caughtFish.scale.setScalar(FISH_SCALE * shrink);
     if (k >= 1) {
       leapTime = -1;
@@ -160,6 +179,8 @@ export function createFishing({ side, player, hand, scene, ocean, rumble, onCatc
   function release() {
     setBar(false);
     hand.releaseCast();
+    // The rod whips forward here, so the whoosh belongs to the throw, not the charge.
+    if (onCast) onCast();
     hand.rodTipPosition(tip);
     const distance = MIN_CAST + (MAX_CAST - MIN_CAST) * power;
     const x = tip.x + Math.sin(player.yaw) * distance;
@@ -192,7 +213,9 @@ export function createFishing({ side, player, hand, scene, ocean, rumble, onCatc
     state = 'returning';
   }
 
-  function reset() {
+  // Put the rod away after a normal return. The caught-fish leap has its own timer
+  // and keeps flying to the angler even though the bobber is already home.
+  function finishReturn() {
     setBar(false);
     game.stop();
     hand.cancelCast();
@@ -204,13 +227,27 @@ export function createFishing({ side, player, hand, scene, ocean, rumble, onCatc
     lineGroup.visible = false;
   }
 
+  function reset() {
+    finishReturn();
+    catchPause = 0;
+    // A hard reset (death, leaving the session, switching away) also takes any fish
+    // still in the air with it.
+    leapTime = -1;
+    caughtFish.visible = false;
+    caughtFish.scale.setScalar(FISH_SCALE);
+  }
+
   function update(dt, controls) {
     const held = player.held === 'fishing_rod';
 
     // Switching away from the rod, or dying, abandons whatever is in progress.
     if (
       !held &&
-      (state === 'charging' || state === 'flying' || state === 'bobbing' || state === 'catching')
+      (state === 'charging' ||
+        state === 'flying' ||
+        state === 'bobbing' ||
+        state === 'catching' ||
+        state === 'caughtPause')
     ) {
       setBar(false);
       game.stop();
@@ -272,8 +309,10 @@ export function createFishing({ side, player, hand, scene, ocean, rumble, onCatc
         biteTimer -= dt;
         if (biteTimer <= 0) {
           bitten = true;
-          // Everything that can say "now" says it: the float shakes and the pad kicks.
+          // Everything that can say "now" says it: the float shakes, the pad kicks and
+          // the bite chirps.
           if (rumble) rumble(0.9, 0.55, 600);
+          if (onBite) onBite();
         }
       }
 
@@ -315,11 +354,18 @@ export function createFishing({ side, player, hand, scene, ocean, rumble, onCatc
       const result = game.update(dt, controls.useHeld);
       if (result === 'caught') {
         hand.setCatch(false, false);
-        startLeap();
+        // Land the fish and let the jingle/flash play before the leap begins.
         if (onCatch) onCatch();
-        goHome();
+        catchPause = CAUGHT_PAUSE;
+        state = 'caughtPause';
       } else if (result === 'escaped') {
         hand.setCatch(false, false);
+        goHome();
+      }
+    } else if (state === 'caughtPause') {
+      catchPause -= dt;
+      if (catchPause <= 0) {
+        startLeap();
         goHome();
       }
     } else if (state === 'returning') {
@@ -327,7 +373,7 @@ export function createFishing({ side, player, hand, scene, ocean, rumble, onCatc
       const k = Math.min(returnTime / RETURN_TIME, 1);
       hand.rodTipPosition(tip);
       group.position.lerpVectors(from, tip, k * k);
-      if (k >= 1) reset();
+      if (k >= 1) finishReturn();
     }
 
     if (lineGroup.visible) {

@@ -13,11 +13,11 @@ export function createSettings() {
   return {
     sprintMode: 'hold',
     uiSize: 'normal',
-    cycle(key) {
+    cycle(key, direction = 1) {
       const list = OPTIONS[key];
       if (!list) return;
       const index = list.indexOf(this[key]);
-      this[key] = list[(index + 1) % list.length];
+      this[key] = list[(index + direction + list.length) % list.length];
     },
   };
 }

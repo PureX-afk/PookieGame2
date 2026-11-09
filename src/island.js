@@ -285,6 +285,16 @@ export function isWalkable(x, z) {
   return heightAt(x, z) > SWIM_DEPTH_LIMIT;
 }
 
+// What a footstep lands on, using the same height bands colorAt paints the ground
+// with. Wading and the bare rock at the top have no surface yet.
+export function surfaceAt(x, z) {
+  const h = heightAt(x, z);
+  if (h < -0.25) return null;
+  if (h < 3.2) return 'sand';
+  if (h < 6.4) return 'grass';
+  return null;
+}
+
 const C_SAND = new THREE.Color(PALETTE.sand);
 const C_SAND_WET = new THREE.Color(PALETTE.sandWet);
 const C_GRASS = new THREE.Color(PALETTE.grass);

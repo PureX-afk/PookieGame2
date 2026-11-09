@@ -21,6 +21,10 @@ import {
 const TURN_SPEED = 2.9;
 const WALK_SPEED = 6.6;
 const BACK_SPEED = 3.6;
+// Sprint legs would otherwise cycle almost twice as fast as a walk. Capping the
+// stride rate keeps the animation readable and the footstep beat from machine-gunning
+// while still moving faster: the stride simply gets longer.
+const MAX_STRIDE_RATE = 13;
 const WADE_SPEED = 0.6;
 const SWIM_SPEED = 0.45;
 // Past this terrain depth you stop wading and float, swimming instead.
@@ -223,15 +227,16 @@ export function createPlayer({ spawn, layer, shirt, pants, skin, hair, settings,
   fiberPivot.add(fiber);
   fiberPivot.visible = false;
 
-  // A carried rugged axe shares that same hand: upright on its own pivot, head up
-  // and tipped forward. The swing pitches the whole arm forward, so the upright
-  // head sweeps down through the arc edge-first.
+  // A carried rugged axe shares that same hand: haft upright, stone head above the
+  // fist, and the bit facing forward and a little to the side, so the avatar carries
+  // it the way the owner's own hand does. The swing pitches the whole arm forward, so
+  // the upright head sweeps down through the arc edge-first.
   const ruggedAxePivot = new THREE.Group();
   ruggedAxePivot.position.set(0, -0.6, 0.025);
   armR.add(ruggedAxePivot);
   const ruggedAxe = createRuggedAxe();
   ruggedAxe.scale.setScalar(0.8);
-  ruggedAxe.rotation.set(-Math.PI / 2 + 0.7, 0, 0.15);
+  ruggedAxe.rotation.set(-Math.PI / 2, 0, Math.PI + 0.5);
   ruggedAxePivot.add(ruggedAxe);
   ruggedAxePivot.visible = false;
 
@@ -381,7 +386,10 @@ export function createPlayer({ spawn, layer, shirt, pants, skin, hair, settings,
       // to, so stopping mid-water just hangs you there until you swim again.
       pos.y += Math.sin(pitch) * step;
       const seabed = heightAt(pos.x, pos.z) + 0.35;
-      pos.y = Math.min(Math.max(pos.y, seabed), FLOAT_Y);
+      // Cap at the float line first: near the swim threshold the seabed sits above it,
+      // and clamping to the floor afterwards would push the body into the sand.
+      const floor = Math.min(seabed, FLOAT_Y);
+      pos.y = Math.min(Math.max(pos.y, floor), FLOAT_Y);
       vy = 0;
       grounded = true;
     } else if (controls.jumpPressed && grounded) {
@@ -410,7 +418,7 @@ export function createPlayer({ spawn, layer, shirt, pants, skin, hair, settings,
     }
 
     // Walk cycle: swing when moving, settle to a stand when idle.
-    stride += Math.abs(step) * 1.7;
+    stride += Math.min(Math.abs(step) * 1.7, MAX_STRIDE_RATE * dt);
     moving = Math.abs(move) > 0.05;
     const swing = Math.sin(stride) * Math.min(Math.abs(move), 1) * 0.62;
 

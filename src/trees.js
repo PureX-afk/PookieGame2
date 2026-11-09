@@ -53,6 +53,9 @@ const AXE_HITS = 10;
 const AXE_DAMAGE = PUNCHES_TO_FELL / AXE_HITS;
 // How long the trunk takes to tip all the way over.
 const FALL_TIME = 1.15;
+// A short rock on the ground after the trunk lands, so the handoff to the stump and
+// logs isn't a hard stop.
+const FALL_SETTLE = 0.35;
 // The fall stops a little short of flat so the crown rests in the grass rather than
 // disappearing through it.
 const FALL_ANGLE = Math.PI * 0.47;
@@ -97,7 +100,7 @@ function makeRandom(seed) {
 // Grow one tree into a single merged vertex-coloured geometry. Every box becomes a
 // handful of triangles with its own flat colour, which keeps the chunky look while
 // letting a whole tree draw in one call.
-function buildTreeGeometry(random) {
+function buildTreeGeometry(random, mother = false) {
   const positions = [];
   const normals = [];
   const colors = [];
@@ -132,86 +135,161 @@ function buildTreeGeometry(random) {
     }
   }
 
-  const trunkHeight = 3.3 + random() * 1.7;
-  const trunkWidth = 0.38 + random() * 0.18;
-  const segments = 4;
+  // A mother tree is old, thick and broad; a child is young, slender and compact.
+  // They share the block-built language but not the silhouette.
+  const trunkHeight = mother ? 4.4 + random() * 1.1 : 2.3 + random() * 1.0;
+  const trunkWidth = mother ? 0.54 + random() * 0.16 : 0.24 + random() * 0.1;
+  const segments = mother ? 5 : 3;
   const segmentHeight = trunkHeight / segments;
+  const barkA = mother ? 0x5b4029 : 0x6b4a2f;
+  const barkB = mother ? 0x4b3421 : 0x5b4029;
 
-  // A tapering trunk made of four blocks, each nudged a little off the last so the
-  // silhouette is crooked rather than a clean chimney.
+  let leanX = 0;
+  let leanZ = 0;
   let topY = 0;
   for (let i = 0; i < segments; i++) {
     const t = i / segments;
-    const width = trunkWidth * (1 - t * 0.38);
-    const shade = i % 2 === 0 ? 0x6b4a2f : 0x5b4029;
+    const width = trunkWidth * (1 - t * (mother ? 0.46 : 0.32));
+    leanX += (random() - 0.5) * (mother ? 0.09 : 0.06);
+    leanZ += (random() - 0.5) * (mother ? 0.09 : 0.06);
     add(
-      shade,
+      i % 2 === 0 ? barkA : barkB,
       width,
       segmentHeight * 1.06,
       width,
-      (random() - 0.5) * 0.09,
+      leanX,
       topY + segmentHeight * 0.5,
-      (random() - 0.5) * 0.09,
-      (random() - 0.5) * 0.035,
+      leanZ,
+      (random() - 0.5) * 0.06,
       random() * Math.PI,
-      (random() - 0.5) * 0.035
+      (random() - 0.5) * 0.06
     );
     topY += segmentHeight;
   }
 
-  // Buttress roots: short blocks leaning out from the foot, so the trunk visibly holds
-  // the ground instead of being pushed into it.
-  for (let i = 0; i < 4; i++) {
-    const angle = (i / 4) * Math.PI * 2 + random() * 0.4;
-    const reach = 0.34 + random() * 0.14;
+  // Roots: the mother grips the ground with a wide flare; the child has small
+  // footholds.
+  const roots = mother ? 6 : 3;
+  for (let i = 0; i < roots; i++) {
+    const angle = (i / roots) * Math.PI * 2 + random() * 0.5;
+    const reach = mother ? 0.44 + random() * 0.3 : 0.2 + random() * 0.12;
+    const length = mother ? 0.72 + random() * 0.35 : 0.34 + random() * 0.18;
     add(
       i % 2 === 0 ? 0x4b3421 : 0x5b4029,
-      0.16 + random() * 0.07,
-      0.22,
-      0.46 + random() * 0.18,
+      mother ? 0.2 + random() * 0.12 : 0.11 + random() * 0.05,
+      mother ? 0.24 : 0.16,
+      length,
       Math.cos(angle) * reach,
-      0.12,
+      mother ? 0.12 : 0.08,
       Math.sin(angle) * reach,
-      0.55,
+      mother ? 0.62 : 0.5,
       angle,
       0
     );
   }
 
-  // A few bare branches poking out under the crown.
-  for (let i = 0; i < 3; i++) {
-    const angle = (i / 3) * Math.PI * 2 + random() * 0.7;
-    const y = trunkHeight * (0.68 + random() * 0.18);
-    add(
-      0x5b4029,
-      0.11,
-      0.11,
-      0.7 + random() * 0.3,
-      Math.cos(angle) * 0.34,
-      y,
-      Math.sin(angle) * 0.34,
-      0.25,
-      angle,
-      0.4
-    );
+  // Moss gathers around an old trunk's foot.
+  if (mother) {
+    for (let i = 0; i < 6; i++) {
+      const angle = random() * Math.PI * 2;
+      const radius = 0.22 + random() * 0.28;
+      add(
+        random() < 0.5 ? 0x2f5a2a : 0x3f6f33,
+        0.16 + random() * 0.16,
+        0.06 + random() * 0.05,
+        0.18 + random() * 0.18,
+        Math.cos(angle) * radius,
+        0.16 + random() * 0.32,
+        Math.sin(angle) * radius,
+        random() * 0.4,
+        random() * Math.PI,
+        random() * 0.4
+      );
+    }
   }
 
-  // The crown: a loose sphere of leaf blocks at several sizes, with a lighter cap on
-  // top and a darker underside so the whole thing still reads in flat light.
-  const crownY = trunkHeight + 0.55;
-  const crownRadius = 1.5 + random() * 0.7;
-  const blobs = 13 + Math.floor(random() * 6);
+  // Branches: the mother splits into a broad set of long limbs; the child has a few
+  // thin twigs under a compact tuft.
+  const branches = mother ? 6 : 3;
+  for (let i = 0; i < branches; i++) {
+    const angle = (i / branches) * Math.PI * 2 + random() * 0.75;
+    const y = trunkHeight * (mother ? 0.52 + random() * 0.38 : 0.55 + random() * 0.24);
+    const length = mother ? 1.2 + random() * 1.2 : 0.5 + random() * 0.5;
+    const thickness = mother ? 0.15 + random() * 0.07 : 0.08 + random() * 0.03;
+    add(
+      mother ? 0x5b4029 : 0x6b4a2f,
+      thickness,
+      thickness,
+      length,
+      Math.cos(angle) * (length * 0.5 + trunkWidth * 0.28),
+      y,
+      Math.sin(angle) * (length * 0.5 + trunkWidth * 0.28),
+      mother ? 0.12 + random() * 0.2 : 0.18 + random() * 0.14,
+      angle,
+      mother ? 0.18 + random() * 0.2 : 0.1
+    );
+
+    if (mother && random() < 0.7) {
+      const bend = angle + (random() - 0.5) * 0.8;
+      const second = 0.6 + random() * 0.7;
+      add(
+        0x4b3421,
+        thickness * 0.7,
+        thickness * 0.7,
+        second,
+        Math.cos(angle) * length + Math.cos(bend) * second * 0.5,
+        y + 0.24 + random() * 0.3,
+        Math.sin(angle) * length + Math.sin(bend) * second * 0.5,
+        0.05 + random() * 0.12,
+        bend,
+        0.35 + random() * 0.2
+      );
+    }
+  }
+
+  // A child's young branches carry a couple of leaf tufts before the main crown.
+  if (!mother) {
+    for (let i = 0; i < 2; i++) {
+      const angle = random() * Math.PI * 2;
+      const radius = 0.55 + random() * 0.25;
+      const size = 0.4 + random() * 0.2;
+      add(
+        random() < 0.5 ? 0x62a447 : 0x7bb650,
+        size,
+        size * 0.8,
+        size,
+        Math.cos(angle) * radius,
+        trunkHeight * 0.62 + random() * 0.35,
+        Math.sin(angle) * radius,
+        random() * 0.3,
+        random() * Math.PI,
+        random() * 0.3
+      );
+    }
+  }
+
+  // Crown. The mother is wide, layered and slightly drooping; the child is a compact,
+  // bright teardrop of young leaves.
+  const crownY = trunkHeight + (mother ? 0.65 : 0.35);
+  const crownRadius = mother ? 2.1 + random() * 0.85 : 0.9 + random() * 0.38;
+  const blobs = mother ? 22 + Math.floor(random() * 8) : 8 + Math.floor(random() * 5);
+  const spreadY = mother ? 2.4 : 0.95;
   for (let i = 0; i < blobs; i++) {
     const angle = random() * Math.PI * 2;
     const radius = Math.sqrt(random()) * crownRadius;
-    const y = crownY + (random() - 0.42) * 2.0;
-    const size = 0.7 + random() * 0.55;
+    const y = crownY + (random() - (mother ? 0.42 : 0.35)) * spreadY;
+    const size = mother ? 0.78 + random() * 0.62 : 0.52 + random() * 0.34;
     const shade = random();
-    const hex = shade < 0.42 ? 0x3f7f3a : shade < 0.74 ? 0x2d5f2c : shade < 0.92 ? 0x62a447 : 0x7bb650;
+    let hex;
+    if (mother) {
+      hex = shade < 0.4 ? 0x3f7f3a : shade < 0.7 ? 0x2d5f2c : shade < 0.9 ? 0x4f9c39 : 0x7bb650;
+    } else {
+      hex = shade < 0.35 ? 0x4f9c39 : shade < 0.62 ? 0x62a447 : shade < 0.85 ? 0x7bb650 : 0x8acb5a;
+    }
     add(
       hex,
       size,
-      size * (0.6 + random() * 0.35),
+      size * (0.65 + random() * 0.3),
       size,
       Math.cos(angle) * radius,
       y,
@@ -222,9 +300,53 @@ function buildTreeGeometry(random) {
     );
   }
 
-  // Two bigger clumps anchor the middle of the crown so it has a solid mass.
-  add(0x3f7f3a, 1.45, 1.05, 1.35, 0, crownY + 0.45, 0, 0.2, 0.4, 0.1);
-  add(0x2d5f2c, 1.15, 0.85, 1.2, 0.25, crownY - 0.35, -0.2, -0.15, 1.1, 0.25);
+  if (mother) {
+    // A lower fringe makes the canopy read as an old, heavy crown.
+    const drapes = 4 + Math.floor(random() * 3);
+    for (let i = 0; i < drapes; i++) {
+      const angle = random() * Math.PI * 2;
+      const radius = 1.1 + random() * 1.0;
+      const size = 0.65 + random() * 0.45;
+      add(
+        random() < 0.5 ? 0x2d5f2c : 0x3f7f3a,
+        size,
+        size * 0.7,
+        size,
+        Math.cos(angle) * radius,
+        crownY - 0.85 - random() * 0.7,
+        Math.sin(angle) * radius,
+        (random() - 0.5) * 0.5,
+        random() * Math.PI,
+        (random() - 0.5) * 0.5
+      );
+    }
+
+    add(0x2d5f2c, 1.7, 1.2, 1.6, 0, crownY + 0.15, 0, 0.2, 0.4, 0.1);
+    add(0x3f7f3a, 1.5, 1.05, 1.4, 0.3, crownY + 0.95, -0.25, -0.15, 1.1, 0.25);
+
+    // Mossy strands hanging out of the underside.
+    for (let i = 0; i < 3; i++) {
+      const angle = random() * Math.PI * 2;
+      const length = 0.6 + random() * 0.7;
+      add(
+        0x2f5a2a,
+        0.07,
+        length,
+        0.07,
+        Math.cos(angle) * crownRadius * 0.72,
+        crownY - length * 0.5 + 0.1,
+        Math.sin(angle) * crownRadius * 0.72,
+        (random() - 0.5) * 0.15,
+        0,
+        (random() - 0.5) * 0.15
+      );
+    }
+  } else {
+    add(0x4f9c39, 0.92, 0.78, 0.88, 0, crownY + 0.1, 0, 0.2, 0.4, 0.1);
+    add(0x62a447, 0.68, 0.58, 0.66, 0.14, crownY + 0.5, -0.1, -0.15, 1.1, 0.25);
+    // A bright young leader shoot at the top.
+    add(0x8acb5a, 0.28, 0.42, 0.28, 0.1, crownY + 0.92, 0.02, 0.1, 0.6, 0.1);
+  }
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -232,7 +354,11 @@ function buildTreeGeometry(random) {
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.computeBoundingSphere();
 
-  return { geometry, height: trunkHeight + 2.2, radius: trunkWidth * 0.62 };
+  let top = 0;
+  for (let i = 1; i < positions.length; i += 3) {
+    if (positions[i] > top) top = positions[i];
+  }
+  return { geometry, height: top, radius: trunkWidth * 0.62 };
 }
 
 // A stump is a short, ragged block where the trunk was: it stays behind as the marker
@@ -500,7 +626,7 @@ export function createTrees({ scene, drop } = {}) {
   const { spots, clumps, bushSpots } = scatterClumps(random, bushRandom);
 
   for (const spot of spots) {
-    const { geometry, height: baseHeight, radius: baseRadius } = buildTreeGeometry(random);
+    const { geometry, height: baseHeight, radius: baseRadius } = buildTreeGeometry(random, spot.mother);
     // Stretch the built tree to the height its place in the clump calls for. Scaling
     // the whole mesh also thins the children, which is what makes the hierarchy read.
     const stature = spot.height / baseHeight;
@@ -527,7 +653,7 @@ export function createTrees({ scene, drop } = {}) {
     const record = {
       index: records.length,
       kind: 'tree',
-      name: 'Tree',
+      name: spot.mother ? 'Mother tree' : 'Child tree',
       x: spot.x,
       y: spot.y,
       z: spot.z,
@@ -554,6 +680,9 @@ export function createTrees({ scene, drop } = {}) {
 
     record.stumpMesh.position.set(spot.x, spot.y, spot.z);
     record.stumpMesh.rotation.y = random() * Math.PI * 2;
+    // A stump follows the trunk that stood there: broad under a mother, small under a
+    // child, so the leftover marker keeps the scale of the tree it replaces.
+    record.stumpMesh.scale.setScalar(Math.min(1.3, Math.max(0.5, record.radius / 0.3)));
     record.stumpMesh.castShadow = true;
     record.stumpMesh.receiveShadow = true;
     record.stumpMesh.visible = false;
@@ -615,6 +744,17 @@ export function createTrees({ scene, drop } = {}) {
     return !record.stump && !record.felling;
   }
 
+  // The fall curve: gravity tips the trunk faster and faster, then it rocks once on
+  // the ground before the stump and logs take over.
+  function fallAngle(time) {
+    if (time < FALL_TIME) {
+      const k = Math.max(0, time) / FALL_TIME;
+      return FALL_ANGLE * (k * k);
+    }
+    const settle = Math.min(time - FALL_TIME, FALL_SETTLE);
+    return FALL_ANGLE - Math.sin(settle * 24) * 0.05 * Math.exp(-settle * 8);
+  }
+
   // Can this target still be hit? Trees stand until they fall; bushes last until they
   // are cut out.
   function strikeable(record) {
@@ -658,7 +798,8 @@ export function createTrees({ scene, drop } = {}) {
         drop(
           'log',
           record.x + (Math.random() - 0.5) * 2.4,
-          record.z + (Math.random() - 0.5) * 2.4
+          record.z + (Math.random() - 0.5) * 2.4,
+          true
         );
       }
     }
@@ -793,11 +934,11 @@ export function createTrees({ scene, drop } = {}) {
       for (const record of records) {
         if (record.felling) {
           record.felling.time += dt;
-          const k = Math.min(record.felling.time / FALL_TIME, 1);
-          // Gravity takes over: the first part of the arc is slow, the last fast.
-          const angle = FALL_ANGLE * (k * k);
-          record.mesh.quaternion.setFromAxisAngle(record.fallAxis, angle);
-          if (k >= 1) finishFall(record);
+          record.mesh.quaternion.setFromAxisAngle(
+            record.fallAxis,
+            fallAngle(record.felling.time)
+          );
+          if (record.felling.time >= FALL_TIME + FALL_SETTLE) finishFall(record);
           continue;
         }
 
@@ -910,8 +1051,10 @@ export function createTrees({ scene, drop } = {}) {
               if (record.fallAxis.lengthSq() < 1e-6) record.fallAxis.set(1, 0, 0);
               record.fallAxis.normalize();
             }
-            const k = Math.min(record.felling.time / FALL_TIME, 1);
-            record.mesh.quaternion.setFromAxisAngle(record.fallAxis, FALL_ANGLE * (k * k));
+            record.mesh.quaternion.setFromAxisAngle(
+              record.fallAxis,
+              fallAngle(record.felling.time)
+            );
           }
         }
       }

@@ -46,6 +46,10 @@ export function createInput() {
     }
     if (pressed && !padBackHeld) {
       window.location.reload();
+      padBackHeld = true;
+      // Keep polling even if the reload is refused (an embedded frame, a browser
+      // prompt): the button still works the next time it is pressed.
+      requestAnimationFrame(pollPadBack);
       return;
     }
     padBackHeld = pressed;
@@ -102,7 +106,12 @@ export function createInput() {
   let pauseKeyHeld = false;
   let navUpKeyHeld = false;
   let navDownKeyHeld = false;
+  let navLeftKeyHeld = false;
+  let navRightKeyHeld = false;
   let mouseLeftHeld = false;
+  // Sprint keys as a rising edge per keyboard player, so the Toggle setting works off
+  // a key as well as the pad's L3.
+  let sprintKeyHeld = [false, false];
   let mouseRightHeld = false;
 
   // Player two's keys: the action cluster beside the arrow keys, since their left
@@ -137,8 +146,8 @@ export function createInput() {
   let dropKeyHeld = [false, false];
 
   const pads = [
-    { turn: 0, move: 0, lookY: 0, yHeld: false, startHeld: false, guideHeld: false, aHeld: false, l3Held: false, useHeld: false, lbHeld: false, rbHeld: false, craftPressed: false, pausePressed: false, guidePressed: false, jumpPressed: false, sprintToggle: false, sprintHeld: false, usePressed: false, slotPrev: false, slotNext: false, navUp: false, navDown: false, upHeld: false, downHeld: false, pickPressed: false, pickHeld: false, dropPressed: false, dropHeld: false, ltPressed: false, ltHeld: false, rtPressed: false },
-    { turn: 0, move: 0, lookY: 0, yHeld: false, startHeld: false, guideHeld: false, aHeld: false, l3Held: false, useHeld: false, lbHeld: false, rbHeld: false, craftPressed: false, pausePressed: false, guidePressed: false, jumpPressed: false, sprintToggle: false, sprintHeld: false, usePressed: false, slotPrev: false, slotNext: false, navUp: false, navDown: false, upHeld: false, downHeld: false, pickPressed: false, pickHeld: false, dropPressed: false, dropHeld: false, ltPressed: false, ltHeld: false, rtPressed: false },
+    { turn: 0, move: 0, lookY: 0, yHeld: false, startHeld: false, guideHeld: false, aHeld: false, l3Held: false, useHeld: false, lbHeld: false, rbHeld: false, craftPressed: false, pausePressed: false, guidePressed: false, jumpPressed: false, sprintToggle: false, sprintHeld: false, usePressed: false, slotPrev: false, slotNext: false, navUp: false, navDown: false, navLeft: false, navRight: false, upHeld: false, downHeld: false, leftHeld: false, rightHeld: false, pickPressed: false, pickHeld: false, dropPressed: false, dropHeld: false, ltPressed: false, ltHeld: false, rtPressed: false },
+    { turn: 0, move: 0, lookY: 0, yHeld: false, startHeld: false, guideHeld: false, aHeld: false, l3Held: false, useHeld: false, lbHeld: false, rbHeld: false, craftPressed: false, pausePressed: false, guidePressed: false, jumpPressed: false, sprintToggle: false, sprintHeld: false, usePressed: false, slotPrev: false, slotNext: false, navUp: false, navDown: false, navLeft: false, navRight: false, upHeld: false, downHeld: false, leftHeld: false, rightHeld: false, pickPressed: false, pickHeld: false, dropPressed: false, dropHeld: false, ltPressed: false, ltHeld: false, rtPressed: false },
   ];
 
   function readPads() {
@@ -169,8 +178,12 @@ export function createInput() {
         pads[i].rbHeld = false;
         pads[i].navUp = false;
         pads[i].navDown = false;
+        pads[i].navLeft = false;
+        pads[i].navRight = false;
         pads[i].upHeld = false;
         pads[i].downHeld = false;
+        pads[i].leftHeld = false;
+        pads[i].rightHeld = false;
         pads[i].pickPressed = false;
         pads[i].pickHeld = false;
         pads[i].dropPressed = false;
@@ -231,7 +244,7 @@ export function createInput() {
       const rb = !!(pad.buttons[5] && pad.buttons[5].pressed);
       pads[i].slotNext = rb && !pads[i].rbHeld;
       pads[i].rbHeld = rb;
-      // Menu navigation: d-pad up/down, or the left stick pushed past half.
+      // Menu navigation: d-pad, or the left stick pushed past half.
       const axisY = pad.axes && pad.axes[1] ? pad.axes[1] : 0;
       const up = !!((pad.buttons[12] && pad.buttons[12].pressed) || axisY < -0.55);
       const down = !!((pad.buttons[13] && pad.buttons[13].pressed) || axisY > 0.55);
@@ -239,6 +252,13 @@ export function createInput() {
       pads[i].navDown = down && !pads[i].downHeld;
       pads[i].upHeld = up;
       pads[i].downHeld = down;
+      const axisX = pad.axes && pad.axes[0] ? pad.axes[0] : 0;
+      const left = !!((pad.buttons[14] && pad.buttons[14].pressed) || axisX < -0.55);
+      const right = !!((pad.buttons[15] && pad.buttons[15].pressed) || axisX > 0.55);
+      pads[i].navLeft = left && !pads[i].leftHeld;
+      pads[i].navRight = right && !pads[i].rightHeld;
+      pads[i].leftHeld = left;
+      pads[i].rightHeld = right;
       // X is button 2 in the standard mapping; edge-triggered so one press is one pick.
       const pick = !!(pad.buttons[2] && pad.buttons[2].pressed);
       pads[i].pickPressed = pick && !pads[i].pickHeld;
@@ -306,6 +326,12 @@ export function createInput() {
       const navDownKey = down.has('KeyS');
       const navDownPressed = navDownKey && !navDownKeyHeld;
       navDownKeyHeld = navDownKey;
+      const navLeftKey = down.has('KeyA');
+      const navLeftPressed = navLeftKey && !navLeftKeyHeld;
+      navLeftKeyHeld = navLeftKey;
+      const navRightKey = down.has('KeyD');
+      const navRightPressed = navRightKey && !navRightKeyHeld;
+      navRightKeyHeld = navRightKey;
 
       const respawnNow = [down.has('Space'), down.has('Enter') || down.has('NumpadEnter')];
       const respawnPressed = [
@@ -333,7 +359,23 @@ export function createInput() {
         next: edge2(P2_KEYS.next),
         navUp: edge2('ArrowUp'),
         navDown: edge2('ArrowDown'),
+        navLeft: edge2('ArrowLeft'),
+        navRight: edge2('ArrowRight'),
       };
+
+      // Same treatment for the sprint keys: only the press that starts the hold counts
+      // as a toggle, so holding Shift doesn't flap sprint on and off every frame.
+      const sprintNow = [
+        // Player one's own key: ShiftRight belongs to player two's cluster, and
+        // pressing it must not toggle or hold player one's sprint.
+        down.has('ShiftLeft'),
+        down.has(P2_KEYS.sprint),
+      ];
+      const sprintToggleKeys = [
+        sprintNow[0] && !sprintKeyHeld[0],
+        sprintNow[1] && !sprintKeyHeld[1],
+      ];
+      sprintKeyHeld = [...sprintNow];
 
       const list = KEYS.map((keys, i) => {
         const pad = pads[i];
@@ -351,11 +393,11 @@ export function createInput() {
           pausePressed: padOn ? pad.pausePressed : mousePlayer ? pauseKeyPressed : p2.pause,
           guidePressed: padOn ? pad.guidePressed : mousePlayer ? false : p2.guide,
           jumpPressed: padOn ? pad.jumpPressed : mousePlayer ? jumpKeyPressed : p2.jump,
-          sprintToggle: padOn ? pad.sprintToggle : false,
+          sprintToggle: padOn ? pad.sprintToggle : sprintToggleKeys[i],
           sprintHeld: padOn
             ? pad.sprintHeld
             : mousePlayer
-              ? down.has('ShiftLeft') || down.has('ShiftRight')
+              ? down.has('ShiftLeft')
               : down.has(P2_KEYS.sprint),
           usePressed: padOn ? pad.usePressed : mousePlayer ? leftPressed : p2.use,
           useHeld: padOn ? pad.useHeld : mousePlayer ? mouseLeft : down.has(P2_KEYS.use),
@@ -363,6 +405,8 @@ export function createInput() {
           slotNext: padOn ? pad.slotNext : mousePlayer ? slotNextPressed : p2.next,
           navUp: padOn ? pad.navUp : mousePlayer ? navUpPressed : p2.navUp,
           navDown: padOn ? pad.navDown : mousePlayer ? navDownPressed : p2.navDown,
+          navLeft: padOn ? pad.navLeft : mousePlayer ? navLeftPressed : p2.navLeft,
+          navRight: padOn ? pad.navRight : mousePlayer ? navRightPressed : p2.navRight,
           // A on the pad, or that player's respawn key on the keyboard.
           respawnPressed: (padOn ? pad.jumpPressed : false) || respawnPressed[i],
           pickPressed: padOn ? pad.pickPressed : pickPressed[i],
@@ -396,6 +440,8 @@ export function createInput() {
           slotNext: false,
           navUp: false,
           navDown: false,
+          navLeft: false,
+          navRight: false,
           respawnPressed: false,
           pickPressed: false,
           dropPressed: false,

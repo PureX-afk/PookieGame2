@@ -139,7 +139,125 @@ body {
   text-shadow: 2px 2px 0 rgba(20, 40, 54, 0.45);
 }
 
+.launch-play.hidden,
+.launch-settings.hidden {
+  display: none;
+}
 
+/* Both views fill the panel. Left to shrink-wrap, the play view sized itself to the
+   longest line of the current question, so the stone buttons changed width from step
+   to step (and grew the first time you clicked through). */
+.launch-play,
+.launch-settings {
+  width: 100%;
+}
+
+.launch-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.launch-level {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #23272b;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(37, 58, 71, 0.92), rgba(20, 37, 48, 0.94));
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.32);
+}
+
+.launch-level.focused {
+  border-color: #ffd98a;
+}
+
+.launch-level-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.launch-level-label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.launch-level-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.launch-level-step {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #7c8b93;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.launch-level-step:hover {
+  border-color: #ffd98a;
+  background: rgba(255, 217, 138, 0.25);
+}
+
+.launch-level-value {
+  min-width: 46px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffd98a;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.launch-song-value {
+  min-width: 78px;
+  white-space: nowrap;
+}
+
+.launch-level-step.launch-shuffle-toggle {
+  width: auto;
+  min-width: 54px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.launch-shuffle-toggle.on {
+  border-color: #ffd98a;
+  color: #ffd98a;
+  background: rgba(255, 217, 138, 0.18);
+}
+
+.launch-level-track {
+  height: 8px;
+  margin-top: 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.launch-level-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #8fd3a8, #ffd98a);
+}
+
+.launch-settings-back {
+  margin-top: 16px;
+}
 
 .launch-step {
   margin: 0 0 12px;
@@ -597,11 +715,14 @@ body {
 }
 
 /* The settings pane stays above the guide, so its rows remain crisp. It is a
-   touch narrower than the crafting panel so split screen leaves room for the pad. */
+   touch narrower than the crafting panel so split screen leaves room for the pad.
+   It hugs its content instead of running the full height of the side. */
 .settings {
   z-index: 3;
   width: var(--settings-width);
-  padding: 14px;
+  padding: 14px 14px 52px;
+  bottom: auto;
+  max-height: calc(100% - 24px);
 }
 
 .settings h2 {
@@ -610,7 +731,7 @@ body {
 
 .settings .row {
   gap: 6px;
-  padding: 7px 6px;
+  padding: 6px;
   font-size: 13px;
 }
 
@@ -625,6 +746,38 @@ body {
 .settings .opt {
   padding: 3px 5px;
   font-size: 11px;
+}
+
+/* Settings has a second screen for the shared sound-effects level. Only one view
+   is shown at a time, and each keeps its own footer hint. */
+.settings .settings-view.hidden {
+  display: none;
+}
+
+.settings h2 .crumb {
+  color: #9db8c6;
+  font-weight: 500;
+}
+
+.settings .volume-track {
+  height: 10px;
+  margin: 6px 2px 0;
+  border: 1px solid rgba(143, 176, 194, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.settings .volume-item + .volume-item {
+  margin-top: 8px;
+}
+
+.settings .volume-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #8fd3a8, #ffd98a);
 }
 
 .settings .foot {
@@ -925,7 +1078,91 @@ body {
   background: rgba(233, 247, 255, 0.06);
 }
 
-/* Catching minigame: vertical gauge with the fish, your bar, and the meter. */
+/* A landed fish celebrates on the catcher's half: HUD rims go green and a Success!
+   banner pops above the crosshair. The glow lingers past the jingle before fading. */
+.hp,
+.hunger,
+.breath,
+.inv {
+  transition: box-shadow 0.18s ease;
+}
+
+.slot {
+  transition: border-color 0.18s ease;
+}
+
+#stage.catch-flash-left .hp.left,
+#stage.catch-flash-left .hunger.left,
+#stage.catch-flash-left .breath.left,
+#stage.catch-flash-left .inv.left,
+#stage.catch-flash-right .hp.right,
+#stage.catch-flash-right .hunger.right,
+#stage.catch-flash-right .breath.right,
+#stage.catch-flash-right .inv.right {
+  box-shadow:
+    0 0 0 2px #8ddc55,
+    0 0 18px rgba(120, 220, 90, 0.55);
+}
+
+#stage.catch-flash-left .inv.left .slot,
+#stage.catch-flash-right .inv.right .slot {
+  border-color: #8ddc55;
+}
+
+.catch-success {
+  position: absolute;
+  top: 21%;
+  left: 50%;
+  z-index: 4;
+  transform: translate(-50%, -50%) scale(0.7);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(24px, 3.6vw, 44px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #b9ff8a;
+  text-shadow:
+    0 2px 0 #3e7d32,
+    0 0 24px rgba(141, 220, 85, 0.6),
+    0 6px 18px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.catch-success.left {
+  left: 25%;
+}
+
+.catch-success.right {
+  left: 75%;
+}
+
+#stage.single .catch-success.left {
+  left: 50%;
+}
+
+.catch-success.show {
+  opacity: 1;
+  animation: catch-success-pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes catch-success-pop {
+  0% {
+    transform: translate(-50%, -50%) scale(0.55);
+    opacity: 0;
+  }
+  55% {
+    transform: translate(-50%, -50%) scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Catching minigame: a Stardew-style wooden gauge and catch meter. */
 .catch-game {
   position: absolute;
   top: 50%;
@@ -950,28 +1187,39 @@ body {
 
 .gauge {
   position: relative;
-  width: calc(58px * var(--ui, 1));
-  border: 2px solid rgba(255, 217, 138, 0.55);
-  border-radius: 14px;
-  background: rgba(10, 34, 46, 0.55);
+  width: calc(66px * var(--ui, 1));
+  border: 3px solid #4a2e17;
+  border-radius: calc(8px * var(--ui, 1));
+  background: #e8d5a2;
+  box-shadow:
+    inset 0 0 0 calc(2px * var(--ui, 1)) #f8ecc9,
+    inset 0 0 calc(10px * var(--ui, 1)) rgba(74, 46, 23, 0.35),
+    0 calc(3px * var(--ui, 1)) 0 rgba(42, 26, 15, 0.55);
   overflow: hidden;
 }
 
 .gauge-water {
   position: absolute;
-  inset: 5px;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #3f7fb0, #24506f);
+  inset: calc(5px * var(--ui, 1));
+  border-radius: calc(4px * var(--ui, 1));
+  background:
+    linear-gradient(180deg, rgba(190, 245, 245, 0.22) 0%, transparent 15%),
+    linear-gradient(180deg, #3f7f9a 0%, #2d5f7a 52%, #1d465e 100%);
+  box-shadow: inset 0 0 calc(12px * var(--ui, 1)) rgba(10, 30, 40, 0.55);
+  overflow: hidden;
 }
 
 .gauge-bar {
   position: absolute;
-  left: 9px;
-  right: 9px;
+  left: calc(4px * var(--ui, 1));
+  right: calc(4px * var(--ui, 1));
   height: 20%;
-  border-radius: 7px;
-  background: linear-gradient(180deg, #8ddc55, #5fae38);
-  box-shadow: 0 0 8px rgba(120, 220, 90, 0.45);
+  z-index: 2;
+  border: 1px solid #2f6d1c;
+  border-radius: calc(3px * var(--ui, 1));
+  background: linear-gradient(180deg, #a8f27a 0%, #6ed34a 48%, #3f9a24 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
 }
 
 .catch-fish {
@@ -981,29 +1229,69 @@ body {
   height: calc(18px * var(--ui, 1));
   margin-left: calc(-13px * var(--ui, 1));
   margin-top: calc(-9px * var(--ui, 1));
+  z-index: 3;
+  filter: drop-shadow(0 calc(1px * var(--ui, 1)) calc(2px * var(--ui, 1)) rgba(0, 0, 0, 0.55));
+  animation: catch-fish-swim 1.7s ease-in-out infinite;
+  transition: filter 0.15s ease;
+}
+
+@keyframes catch-fish-swim {
+  0%,
+  100% {
+    transform: translateX(0) rotate(-1.5deg);
+  }
+  50% {
+    transform: translateX(calc(1.5px * var(--ui, 1))) rotate(1.5deg);
+  }
+}
+
+.catch-game.on-target .gauge-bar {
+  filter: brightness(1.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 0 calc(8px * var(--ui, 1)) rgba(120, 220, 90, 0.45);
+}
+
+.catch-game.on-target .catch-fish {
+  filter: drop-shadow(0 0 calc(4px * var(--ui, 1)) rgba(190, 255, 150, 0.7));
 }
 
 .progress {
   position: relative;
   width: calc(16px * var(--ui, 1));
-  border: 1px solid rgba(233, 247, 255, 0.22);
-  border-radius: 10px;
-  background: rgba(10, 34, 46, 0.55);
+  border: 2px solid #4a2e17;
+  border-radius: calc(6px * var(--ui, 1));
+  background: #e8d5a2;
+  box-shadow:
+    inset 0 0 0 calc(2px * var(--ui, 1)) #f8ecc9,
+    0 calc(2px * var(--ui, 1)) 0 rgba(42, 26, 15, 0.5);
   overflow: hidden;
+}
+
+.progress::after {
+  content: '';
+  position: absolute;
+  inset: calc(3px * var(--ui, 1));
+  z-index: 0;
+  border-radius: calc(3px * var(--ui, 1));
+  background: #1d3a48;
+  box-shadow: inset 0 0 calc(5px * var(--ui, 1)) rgba(0, 0, 0, 0.6);
 }
 
 .progress-fill {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: calc(3px * var(--ui, 1));
+  right: calc(3px * var(--ui, 1));
+  bottom: calc(3px * var(--ui, 1));
   height: 0%;
-  background: linear-gradient(180deg, #8ddc55, #5fae38);
+  z-index: 1;
+  border-radius: calc(3px * var(--ui, 1));
+  background: linear-gradient(180deg, #8ee85a, #5cc038 45%, #3f9a24);
   transition: background 0.2s ease;
 }
 
 .progress-fill.low {
-  background: linear-gradient(180deg, #ff8a5c, #e2452f);
+  background: linear-gradient(180deg, #ff9a6a, #e2603a 45%, #b43a24);
 }
 
 /* Cast power bar: sweeps left to right while RT is held, above every HUD row. */

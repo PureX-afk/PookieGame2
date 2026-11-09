@@ -572,7 +572,14 @@ export function createCampfire() {
   group.add(fire);
 
   group.traverse((object) => {
-    if (object.isMesh && !object.material.emissive) {
+    if (!object.isMesh) return;
+    // The flames carry a lit emissive colour and cast nothing; the stones, ash and logs
+    // are plain lambert and take shadows like the rest of the world. Every lambert
+    // material owns an emissive Color object, so the test is on its value, not on the
+    // property merely being present.
+    const glow = object.material.emissive;
+    const isFlame = !!(glow && glow.getHex() !== 0x000000);
+    if (!isFlame) {
       object.castShadow = true;
       object.receiveShadow = true;
     }
@@ -703,35 +710,89 @@ export function createSimpleTool() {
 }
 
 const AXE_MATS = {
+  barkLight: material(0x8a6440),
+  grip: material(0x5b3d26),
   binding: material(0x7a7a2e),
+  bindingLight: material(0x9aa03c),
+  stoneLight: material(0xa9b0b7),
+  edge: material(0xb9c0c6),
 };
 
-// A rugged axe: a long haft with a stone head bound across its top end, the joint
-// wrapped twice in olive twine the way the reference art lashes it. Built along +Z
-// with the head at the far end, so the hands stand it upright the way they do the
-// simple tool — edge up and out — and lying flat it drops like a long stick.
+// A rugged axe: a hand-carved haft with a knapped stone head lashed across its top
+// end the way the reference art ties it — two twine collars pinning the head to the
+// haft, an X of twine laid over the stone, and a knot with loose tails on one edge.
+// The bit is stone stacked in steps that widen toward a pale sharpened rim, so the
+// head reads as a chopping blade rather than another round lump. Built along +Z with
+// the head at the far end and the edge up, so the hands stand it upright the way they
+// do the simple tool, and lying flat it drops along the ground like a long stick.
 export function createRuggedAxe() {
   const group = new THREE.Group();
   group.name = 'rugged_axe';
 
-  const haft = new THREE.Mesh(BOX, STICK_MATS.bark);
-  haft.scale.set(0.055, 0.055, 0.5);
-  haft.position.y = 0.03;
-  group.add(haft);
-
-  const head = new THREE.Mesh(LUMP, ROCK_MATS.stone);
-  head.scale.set(0.15, 0.16, 0.1);
-  head.position.set(0, 0.09, 0.22);
-  head.rotation.set(0.2, 0.3, 0.15);
-  group.add(head);
-
-  // Two twine wraps lashing the head to the haft.
-  for (const z of [0.12, 0.16]) {
-    const wrap = new THREE.Mesh(BOX, AXE_MATS.binding);
-    wrap.scale.set(0.075, 0.075, 0.035);
-    wrap.position.set(0, 0.03, z);
-    group.add(wrap);
+  // Every part is a box or a faceted lump, positioned by hand. `block` adds one and
+  // returns it, so the odd part can be nudged afterwards.
+  function block(mat, geometry, w, h, d, x, y, z, rx = 0, ry = 0, rz = 0) {
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.scale.set(w, h, d);
+    mesh.position.set(x, y, z);
+    mesh.rotation.set(rx, ry, rz);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    return mesh;
   }
+
+  // Haft: five lengths of bark, each thinner and turned a degree or two off the one
+  // before, so the handle reads as whittled crooked rather than milled straight. The
+  // underside sits on the origin, so a dropped axe lies on the ground instead of
+  // sinking into it.
+  block(STICK_MATS.barkDark, BOX, 0.074, 0.084, 0.034, 0, 0.043, -0.272, 0, 0.12, 0);
+  block(STICK_MATS.bark, BOX, 0.064, 0.076, 0.13, 0, 0.039, -0.213, 0, 0.06, 0);
+  block(STICK_MATS.bark, BOX, 0.059, 0.07, 0.13, 0.003, 0.036, -0.085, 0, -0.07, 0.015);
+  block(STICK_MATS.bark, BOX, 0.055, 0.065, 0.12, -0.002, 0.034, 0.035, 0, 0.08, -0.02);
+  block(STICK_MATS.barkDark, BOX, 0.052, 0.061, 0.13, 0, 0.032, 0.155, 0, -0.05, 0.015);
+  // The haft runs on through the head's eye and shows past it, split by a peg, so the
+  // stone sits on real wood rather than being balanced on the end.
+  block(STICK_MATS.barkDark, BOX, 0.041, 0.048, 0.06, 0, 0.031, 0.245, 0, 0.04, 0);
+  block(STICK_MATS.bark, BOX, 0.037, 0.043, 0.03, 0, 0.031, 0.294, 0, 0.04, 0);
+  block(AXE_MATS.barkLight, BOX, 0.038, 0.009, 0.022, 0, 0.031, 0.302, 0, 0.04, 0.05);
+
+  // A hide wrap where the hand closes: three turns of it, keeping the palm from
+  // sliding up the bark.
+  for (let i = 0; i < 3; i++) {
+    block(AXE_MATS.grip, BOX, 0.061, 0.071, 0.028, 0, 0.037, -0.035 + i * 0.032, 0, 0.1, 0);
+  }
+
+  // Bark detail: two ridges and a split, so the haft is not a smooth dowel.
+  block(STICK_MATS.barkDark, BOX, 0.044, 0.024, 0.06, 0.026, 0.072, -0.184, 0, 0.3, 0.35);
+  block(AXE_MATS.barkLight, BOX, 0.03, 0.014, 0.1, -0.027, 0.021, -0.12, 0, -0.4, -0.3);
+  block(STICK_MATS.barkDark, BOX, 0.012, 0.052, 0.012, 0.028, 0.05, -0.062, 0.1, 0, 0.2);
+
+  // The knapped head: a rough core over the haft's eye, a heavier lump at the back of
+  // the head for weight, and a knapped cheek standing proud over the haft.
+  block(ROCK_MATS.stone, LUMP, 0.155, 0.145, 0.15, 0, 0.086, 0.24, 0.14, 0.3, 0.08);
+  block(ROCK_MATS.stoneDark, LUMP, 0.115, 0.105, 0.1, -0.006, 0.072, 0.322, 0.4, 0.2, 0.3);
+  block(ROCK_MATS.stone, LUMP, 0.09, 0.09, 0.08, 0.004, 0.15, 0.205, 0.6, 0.1, 0.2);
+
+  // The bit: four steps up off the core, each broader along the haft and shallower
+  // through it than the one below, so the head swells into a wide shallow edge rather
+  // than staying a lump of rock.
+  block(ROCK_MATS.stone, BOX, 0.084, 0.054, 0.16, 0, 0.138, 0.24, 0.05, 0.02, 0);
+  block(ROCK_MATS.stone, BOX, 0.07, 0.048, 0.186, 0, 0.178, 0.242, 0.04, -0.02, 0);
+  block(ROCK_MATS.stoneLight, BOX, 0.052, 0.04, 0.198, 0, 0.208, 0.243, 0.03, 0, 0);
+  block(AXE_MATS.edge, BOX, 0.028, 0.026, 0.2, 0, 0.23, 0.243, 0.02, 0, 0);
+
+  // Chips nicked out of the rim at both ends of the edge, where the stone has bitten
+  // into wood, and a pale flake scar across the cheek.
+  block(ROCK_MATS.stoneDark, LUMP, 0.05, 0.05, 0.05, 0, 0.232, 0.152, 0.4, 0.2, 0.3);
+  block(ROCK_MATS.stoneDark, LUMP, 0.045, 0.045, 0.045, 0, 0.234, 0.322, 0.4, 0.2, 0.3);
+  block(ROCK_MATS.stoneLight, BOX, 0.03, 0.012, 0.052, 0, 0.19, 0.28, 0.2, 0.3, 0.15);
+
+  // Twine wrapped around the joint, not laid over a face: three turns of cord pinning
+  // the head down onto the haft, the middle one heavier where it crosses itself.
+  block(AXE_MATS.binding, BOX, 0.068, 0.076, 0.026, 0, 0.038, 0.112, 0, 0.04, 0);
+  block(AXE_MATS.bindingLight, BOX, 0.074, 0.078, 0.03, 0, 0.038, 0.14, 0, -0.03, 0);
+  block(AXE_MATS.binding, BOX, 0.07, 0.076, 0.024, 0, 0.038, 0.167, 0, 0.05, 0);
 
   group.traverse((object) => {
     if (object.isMesh) {
