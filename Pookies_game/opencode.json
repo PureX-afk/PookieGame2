@@ -1,0 +1,42 @@
+{
+    "mcpServers": {
+      "videogamemcp.com": {
+      "url": "https://sse.videogamemcp.com/sse",
+      "enabled": true
+      }
+    },
+    "mcp": {
+      "servers": {
+        "videogamemcp.com": {
+          "type": "remote",
+          "url": "https://sse.videogamemcp.com/sse"
+        },
+        "mcp-game-builder": {
+          "type": "local",
+          "command": [
+            "npx",
+            "-y",
+            "@tonybro/mcp-game-server"
+          ]
+        },
+        "local-files": {
+          "type": "local",
+          "command": [
+            "npx",
+            "-y",
+            "@modelcontextprotocol/server-filesystem",
+            "/home/purexdev/mcp-game-server"
+          ]
+        },
+        "memory": {
+          "type": "local",
+          "command": [
+            "npx",
+            "-y",
+            "@modelcontextprotocol/server-memory"
+          ]
+        }
+      }
+    }
+  }
+  

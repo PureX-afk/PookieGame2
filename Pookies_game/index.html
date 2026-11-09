@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Driftwood — slice 1</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="src/style.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- The canvas is the menu's backdrop; the HUD layers stay hidden until a session. -->
+  <div id="stage" class="menu">
+    <canvas id="game"></canvas>
+    <div class="divider"></div>
+    <div class="tag tag-a">P1</div>
+    <div class="tag tag-b">P2</div>
+  </div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

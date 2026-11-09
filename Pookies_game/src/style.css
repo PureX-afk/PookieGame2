@@ -1,0 +1,1542 @@
+* { box-sizing: border-box; }
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #cfeaf8;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  --ui-left: 1;
+  --ui-right: 1;
+  /* The settings pane and the controller reference split the player's side: the
+     pane keeps the full height on the outer edge, the pad gets everything else. */
+  --settings-width: min(300px, 32vw);
+}
+
+#stage.multi {
+  --settings-width: min(210px, 30vw);
+}
+
+/* In the menu the canvas stays — it *is* the background — but every HUD layer goes. */
+#stage.menu > :not(#game) {
+  display: none;
+}
+
+/* Per-player HUD scale, set from the settings panel (Normal / Large / Huge). */
+.tag-a,
+.hp.left,
+.hunger.left,
+.breath.left,
+.cast.left,  .catch-game.left,
+  .cooking.left,
+  .lighting.left,
+.crosshair.left,
+.inv.left {
+  --ui: var(--ui-left, 1);
+}
+
+.tag-b,
+.hp.right,
+.hunger.right,
+.breath.right,
+.cast.right,  .catch-game.right,
+  .cooking.right,
+  .lighting.right,
+.crosshair.right,
+.inv.right {
+  --ui: var(--ui-right, 1);
+}
+
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The main menu: the live world sits behind it, seen from a slow orbit, with a scrim
+   over the top so the lettering and the stone buttons stay readable. */
+.launch {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(
+    circle at 50% 42%,
+    rgba(6, 20, 28, 0.08) 0%,
+    rgba(6, 20, 28, 0.36) 55%,
+    rgba(4, 14, 20, 0.6) 100%
+  );
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  color: #eaf7ff;
+  overflow: hidden;
+}
+
+/* A column of logo, buttons and hints sitting straight on the scene, the way a title
+   screen does — nothing framing it but the background. */
+.launch-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(460px, 86vw);
+}
+
+/* Nothing moves for players who asked for that. */
+@media (prefers-reduced-motion: reduce) {
+  .launch-title {
+    animation: none;
+  }
+}
+
+.launch.hidden {
+  display: none;
+}
+
+/* The logo: cream lettering with a stack of brown extrusion under it, bobbing a few
+   pixels. Text shadow is the whole 3D effect — no images. */
+.launch-title {
+  margin: 0;
+  font-size: clamp(42px, 6.4vw, 76px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f8ecd2;
+  text-shadow:
+    0 2px 0 #7a5330,
+    0 4px 0 #664226,
+    0 6px 0 #53351e,
+    0 8px 0 #422a17,
+    0 14px 22px rgba(10, 26, 36, 0.5);
+  animation: menu-bob 7s ease-in-out infinite;
+}
+
+@keyframes menu-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.launch-subtitle {
+  margin: 10px 0 22px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.38em;
+  text-transform: uppercase;
+  color: #ffeab8;
+  text-shadow: 2px 2px 0 rgba(20, 40, 54, 0.45);
+}
+
+
+
+.launch-step {
+  margin: 0 0 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-align: center;
+  color: #ffffff;
+  text-shadow: 2px 2px 0 rgba(18, 40, 54, 0.5);
+}
+
+.launch-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+/* Stone buttons: flat, hard-edged, bevelled with inset light on top and dark
+   underneath, white text with a hard drop shadow. */
+.launch-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 11px 20px;
+  border: 2px solid #23272b;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #9d9d9d 0%, #8b8b8b 46%, #6f6f6f 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.32),
+    0 3px 0 rgba(0, 0, 0, 0.22);
+  color: #ffffff;
+  font: inherit;
+  cursor: pointer;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  transition: filter 90ms ease, transform 90ms ease, border-color 90ms ease;
+}
+
+/* Hover — or the controller cursor sitting on it — lights the stone and warms the
+   frame to the game's gold. */
+.launch-option:hover,
+.launch-option.selected {
+  filter: brightness(1.14);
+  border-color: #ffd98a;
+  transform: translateY(-1px);
+}
+
+.launch-option:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 0 rgba(0, 0, 0, 0.25),
+    inset 0 -2px 0 rgba(255, 255, 255, 0.2);
+}
+
+.launch-option-label {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.launch-option-note {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.launch-back {
+  margin: 16px 0 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #ffffff;
+  text-shadow: 2px 2px 0 rgba(18, 40, 54, 0.5);
+  cursor: pointer;
+}
+
+.launch-back:hover {
+  color: #ffeab8;
+}
+
+.launch-back.hidden {
+  display: none;
+}
+
+.launch-foot {
+  margin: 18px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 1px 1px 0 rgba(18, 40, 54, 0.45);
+}
+
+/* Version and credits, tucked into the bottom corners. */
+.launch-version,
+.launch-tag {
+  position: absolute;
+  bottom: 12px;
+  margin: 0;
+  font-size: 12px;
+  color: #ffffff;
+  text-shadow: 1px 1px 0 rgba(18, 40, 54, 0.55);
+}
+
+.launch-version {
+  left: 16px;
+}
+
+.launch-tag {
+  right: 16px;
+}
+
+/* Single player: no second half, so no divider, no P2 tag and no right-hand HUD. */
+#stage.single .divider,
+#stage.single .tag-b,
+#stage.single [class*=" right"] {
+  display: none;
+}
+
+/* Everything on player one's side was anchored to the middle of the left half, so in a
+   full-screen session it moves to the middle of the screen. Their own transforms stay:
+   only `left` is overridden. */
+#stage.single .hp.left,
+#stage.single .hunger.left,
+#stage.single .breath.left,
+#stage.single .cast.left,
+#stage.single .catch-game.left,
+#stage.single .cooking.left,
+#stage.single .lighting.left,
+#stage.single .crosshair.left,
+#stage.single .inv.left {
+  left: 50%;
+}
+
+/* The two half-screen tints and the death screen now cover the whole view. */
+#stage.single .underwater.left,
+#stage.single .death.left {
+  width: 100%;
+}
+
+.divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(12, 40, 54, 0.22);
+  pointer-events: none;
+}
+
+.tag {
+  position: absolute;
+  top: calc(14px * var(--ui, 1));
+  padding: calc(5px * var(--ui, 1)) calc(11px * var(--ui, 1));
+  border-radius: 999px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: calc(12px * var(--ui, 1));
+  line-height: 1;
+  letter-spacing: 0.12em;
+  color: #fff;
+  pointer-events: none;
+}
+
+.tag-a {
+  left: calc(18px * var(--ui, 1));
+  background: rgba(226, 88, 57, 0.85);
+}
+
+.tag-b {
+  left: calc(50% + 18px * var(--ui, 1));
+  background: rgba(36, 158, 184, 0.85);
+}
+
+/* Shared side panels: crafting (Y) and settings (Start), one per player. */
+.crafting {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  width: min(300px, 32vw);
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: rgba(12, 28, 38, 0.8);
+  color: #eaf7ff;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  pointer-events: none;
+}
+
+.crafting.hidden {
+  display: none;
+}
+
+.crafting.left {
+  left: 12px;
+}
+
+.crafting.right {
+  right: 12px;
+}
+
+.crafting h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffd98a;
+}
+
+.crafting h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8fb0c2;
+}
+
+.crafting .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 10px;
+  border: 1px solid rgba(143, 176, 194, 0.18);
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+
+.crafting .row.focused {
+  border-color: #ffd98a;
+  background: rgba(255, 217, 138, 0.08);
+}
+
+.crafting .row .label {
+  white-space: nowrap;
+}
+
+.crafting .options {
+  display: flex;
+  gap: 6px;
+}
+
+.crafting .opt {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #9db8c6;
+  font-size: 12px;
+}
+
+/* The save row is an action, not a setting, so it reads as a button. */
+.crafting .row.action .opt {
+  background: rgba(255, 217, 138, 0.22);
+  color: #ffd98a;
+  font-weight: 700;
+}
+
+.crafting .opt.active {
+  background: #ffd98a;
+  color: #16262f;
+  font-weight: 700;
+}
+
+.crafting .row + .row {
+  margin-top: 6px;
+}
+
+.crafting .recipe .cost {
+  font-size: 12px;
+  color: #9db8c6;
+  white-space: nowrap;
+}
+
+/* Green when the bag holds enough, warm when it doesn't. */
+.crafting .recipe.craftable .cost {
+  color: #a8e6a0;
+}
+
+.crafting .recipe.missing .cost {
+  color: #dd8f74;
+}
+
+.crafting .note {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #cfe3ee;
+}
+
+.crafting .empty {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #cfe3ee;
+}
+
+.crafting .foot {
+  position: absolute;
+  bottom: 10px;
+  left: 18px;
+  right: 18px;
+  margin: 0;
+  font-size: 12px;
+  color: #9db8c6;
+}
+
+/* While a player's settings are open, the rest of their side becomes a large
+   controller reference: a scrim over the action with one big readable card. */
+.controls-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(6, 20, 28, 0.78), rgba(6, 20, 28, 0.62));
+  pointer-events: none;
+}
+
+.controls-guide.hidden {
+  display: none;
+}
+
+.controls-guide.left {
+  left: 0;
+  padding-left: calc(var(--settings-width) + 16px);
+}
+
+.controls-guide.right {
+  right: 0;
+  padding-right: calc(var(--settings-width) + 16px);
+}
+
+#stage.single .controls-guide {
+  width: 100%;
+}
+
+.controls-card {
+  width: min(1000px, 100%);
+  max-height: 100%;
+  padding: 14px 16px 18px;
+  border: 1px solid rgba(143, 176, 194, 0.22);
+  border-radius: 18px;
+  background: rgba(12, 28, 38, 0.92);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  color: #eaf7ff;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  container-type: inline-size;
+}
+
+@container (max-width: 360px) {
+  .controls-head span {
+    display: none;
+  }
+}
+
+.controls-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.controls-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffd98a;
+}
+
+.controls-head span {
+  font-size: 12px;
+  color: #9db8c6;
+}
+
+/* The artwork and its notes share one box, so percentage positions line up with
+   the buttons no matter how wide the card gets. */
+.pad-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 744 / 500;
+  margin: 0 auto;
+  container-type: inline-size;
+}
+
+.pad-render {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.4));
+}
+
+.pad-note {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.35em 0.7em;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(8, 19, 26, 0.86);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.36);
+  color: #eaf7ff;
+  font-size: 12px;
+  font-size: clamp(9.5px, 2.6cqw, 13.5px);
+  line-height: 1;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+}
+
+/* Split screen gives the card less width, so tighten the pills rather than let
+   the centre cluster run into itself. */
+@container (max-width: 480px) {
+  .pad-note {
+    gap: 0.3em;
+    padding: 0.28em 0.55em;
+  }
+}
+
+.pad-note.start {
+  transform: translate(0, -50%);
+}
+
+.pad-note.end {
+  transform: translate(-100%, -50%);
+}
+
+.pad-note b {
+  color: #ffd98a;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.pad-note b.tone-y { color: #f0c53b; }
+.pad-note b.tone-x { color: #66b3f5; }
+.pad-note b.tone-b { color: #ef7469; }
+.pad-note b.tone-a { color: #7ad173; }
+
+.pad-note-act {
+  color: #cfe3ee;
+  font-weight: 600;
+}
+
+/* The settings pane stays above the guide, so its rows remain crisp. It is a
+   touch narrower than the crafting panel so split screen leaves room for the pad. */
+.settings {
+  z-index: 3;
+  width: var(--settings-width);
+  padding: 14px;
+}
+
+.settings h2 {
+  font-size: 14px;
+}
+
+.settings .row {
+  gap: 6px;
+  padding: 7px 6px;
+  font-size: 13px;
+}
+
+.settings .row .label {
+  font-size: 12.5px;
+}
+
+.settings .options {
+  gap: 3px;
+}
+
+.settings .opt {
+  padding: 3px 5px;
+  font-size: 11px;
+}
+
+.settings .foot {
+  left: 14px;
+  right: 14px;
+  font-size: 11px;
+}
+
+/* Fades in over one player's half when their eyes go below the waterline. */
+.underwater {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(30, 140, 186, 0.5),
+    rgba(10, 74, 112, 0.62)
+  );
+}
+
+.underwater.left {
+  left: 0;
+}
+
+.underwater.right {
+  right: 0;
+}
+
+/* Crosshair: four ticks around a centre dot, at the middle of each player's view. */
+.crosshair {
+  position: absolute;
+  top: 50%;
+  width: calc(20px * var(--ui, 1));
+  height: calc(20px * var(--ui, 1));
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.crosshair.left {
+  left: 25%;
+}
+
+.crosshair.right {
+  left: 75%;
+}
+
+.crosshair::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(#ffffff, #ffffff) 50% 0 / 2px 6px no-repeat,
+    linear-gradient(#ffffff, #ffffff) 50% 100% / 2px 6px no-repeat,
+    linear-gradient(#ffffff, #ffffff) 0 50% / 6px 2px no-repeat,
+    linear-gradient(#ffffff, #ffffff) 100% 50% / 6px 2px no-repeat;
+  opacity: 0.82;
+  filter: drop-shadow(0 0 1.5px rgba(6, 24, 34, 0.9));
+}
+
+.crosshair.aiming::before {
+  opacity: 1;
+}
+
+/* Name of the aimed item, with the button that takes it. */
+.crosshair-label {
+  position: absolute;
+  top: calc(26px * var(--ui, 1));
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui, 1));
+  padding: calc(4px * var(--ui, 1)) calc(8px * var(--ui, 1));
+  border-radius: 999px;
+  background: rgba(10, 34, 46, 0.62);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: calc(12px * var(--ui, 1));
+  line-height: 1.1;
+  color: #eaf7ff;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+
+.crosshair-label.visible {
+  opacity: 1;
+}
+
+.crosshair-name {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.crosshair-key {
+  padding: calc(1px * var(--ui, 1)) calc(5px * var(--ui, 1));
+  border: 1px solid rgba(255, 217, 138, 0.75);
+  border-radius: calc(4px * var(--ui, 1));
+  font-size: calc(10px * var(--ui, 1));
+  font-weight: 700;
+  color: #ffd98a;
+}
+
+.crosshair::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(3px * var(--ui, 1));
+  height: calc(3px * var(--ui, 1));
+  margin: calc(-1.5px * var(--ui, 1)) 0 0 calc(-1.5px * var(--ui, 1));
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 2px rgba(6, 24, 34, 0.9);
+}
+
+/* Breath: fifteen bubbles, centred above the hearts. */
+.breath {
+  position: absolute;
+  bottom: calc(128px * var(--ui, 1));
+  display: flex;
+  gap: calc(5px * var(--ui, 1));
+  padding: calc(7px * var(--ui, 1)) calc(11px * var(--ui, 1));
+  border-radius: 999px;
+  background: rgba(10, 34, 46, 0.42);
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+
+.breath.hidden {
+  opacity: 0;
+}
+
+.breath.left {
+  left: 25%;
+  transform: translateX(-50%);
+}
+
+.breath.right {
+  left: 75%;
+  transform: translateX(-50%);
+}
+
+.bubble {
+  width: calc(11px * var(--ui, 1));
+  height: calc(11px * var(--ui, 1));
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 30%, #ffffff, #8fe6ff 55%, #3aa9d4);
+  box-shadow: 0 0 4px rgba(143, 230, 255, 0.5);
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.bubble.spent {
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+  transform: scale(0.72);
+}
+
+/* Health: fifteen hearts, always on screen, above the hotbar. */
+.hp {
+  position: absolute;
+  bottom: calc(60px * var(--ui, 1));
+  display: flex;
+  gap: calc(2px * var(--ui, 1));
+  padding: calc(6px * var(--ui, 1)) calc(10px * var(--ui, 1));
+  border-radius: 999px;
+  background: rgba(10, 34, 46, 0.42);
+  pointer-events: none;
+}
+
+.hp.left {
+  left: 25%;
+  transform: translateX(-50%);
+}
+
+.hp.right {
+  left: 75%;
+  transform: translateX(-50%);
+}
+
+.heart {
+  position: relative;
+  display: block;
+  width: calc(15px * var(--ui, 1));
+  height: calc(15px * var(--ui, 1));
+  font-size: calc(15px * var(--ui, 1));
+  line-height: calc(15px * var(--ui, 1));
+  color: rgba(233, 247, 255, 0.16);
+}
+
+.heart::before {
+  content: '♥';
+}
+
+/* Clipped to the fraction of the heart still filled. */
+.heart-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  overflow: hidden;
+  color: #ff5566;
+}
+
+.heart-fill::before {
+  content: '♥';
+}
+
+/* Hunger: ten drumsticks above the hearts, two hunger points each. */
+.hunger {
+  position: absolute;
+  bottom: calc(94px * var(--ui, 1));
+  display: flex;
+  gap: calc(3px * var(--ui, 1));
+  padding: calc(6px * var(--ui, 1)) calc(10px * var(--ui, 1));
+  border-radius: 999px;
+  background: rgba(10, 34, 46, 0.42);
+  pointer-events: none;
+}
+
+.hunger.left {
+  left: 25%;
+  transform: translateX(-50%);
+}
+
+.hunger.right {
+  left: 75%;
+  transform: translateX(-50%);
+}
+
+.steak {
+  position: relative;
+  display: block;
+  width: calc(15px * var(--ui, 1));
+  height: calc(15px * var(--ui, 1));
+  font-size: calc(12px * var(--ui, 1));
+  line-height: calc(15px * var(--ui, 1));
+}
+
+/* The empty slot underneath stays on screen, dimmed, like a spent heart. */
+.steak::before {
+  content: '🍗';
+  position: absolute;
+  top: 0;
+  left: 0;
+  filter: grayscale(1);
+  opacity: 0.28;
+}
+
+/* Clipped to the fraction of the drumstick still eaten. */
+.steak-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.steak-fill::before {
+  content: '🍗';
+}
+
+/* Hotbar: ten slots per player at the very bottom, an empty slot meaning bare hand. */
+.inv {
+  position: absolute;
+  bottom: calc(14px * var(--ui, 1));
+  display: flex;
+  gap: calc(6px * var(--ui, 1));
+  padding: calc(5px * var(--ui, 1));
+  border-radius: 12px;
+  background: rgba(10, 34, 46, 0.42);
+  pointer-events: none;
+}
+
+.inv.left {
+  left: 25%;
+  transform: translateX(-50%);
+}
+
+.inv.right {
+  left: 75%;
+  transform: translateX(-50%);
+}
+
+.slot {
+  position: relative;
+  overflow: hidden;
+  width: calc(30px * var(--ui, 1));
+  height: calc(30px * var(--ui, 1));
+  border: 1px solid rgba(233, 247, 255, 0.22);
+  border-radius: calc(7px * var(--ui, 1));
+  background: rgba(233, 247, 255, 0.06);
+}
+
+/* Catching minigame: vertical gauge with the fish, your bar, and the meter. */
+.catch-game {
+  position: absolute;
+  top: 50%;
+  display: flex;
+  gap: calc(8px * var(--ui, 1));
+  height: min(46vh, 380px);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.catch-game.hidden {
+  display: none;
+}
+
+.catch-game.left {
+  left: 25%;
+}
+
+.catch-game.right {
+  left: 75%;
+}
+
+.gauge {
+  position: relative;
+  width: calc(58px * var(--ui, 1));
+  border: 2px solid rgba(255, 217, 138, 0.55);
+  border-radius: 14px;
+  background: rgba(10, 34, 46, 0.55);
+  overflow: hidden;
+}
+
+.gauge-water {
+  position: absolute;
+  inset: 5px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #3f7fb0, #24506f);
+}
+
+.gauge-bar {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  height: 20%;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #8ddc55, #5fae38);
+  box-shadow: 0 0 8px rgba(120, 220, 90, 0.45);
+}
+
+.catch-fish {
+  position: absolute;
+  left: 50%;
+  width: calc(26px * var(--ui, 1));
+  height: calc(18px * var(--ui, 1));
+  margin-left: calc(-13px * var(--ui, 1));
+  margin-top: calc(-9px * var(--ui, 1));
+}
+
+.progress {
+  position: relative;
+  width: calc(16px * var(--ui, 1));
+  border: 1px solid rgba(233, 247, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(10, 34, 46, 0.55);
+  overflow: hidden;
+}
+
+.progress-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0%;
+  background: linear-gradient(180deg, #8ddc55, #5fae38);
+  transition: background 0.2s ease;
+}
+
+.progress-fill.low {
+  background: linear-gradient(180deg, #ff8a5c, #e2452f);
+}
+
+/* Cast power bar: sweeps left to right while RT is held, above every HUD row. */
+.cast {
+  position: absolute;
+  bottom: calc(170px * var(--ui, 1));
+  width: min(240px, 40%);
+  pointer-events: none;
+}
+
+.cast.hidden {
+  display: none;
+}
+
+.cast.left {
+  left: 25%;
+  transform: translateX(-50%);
+}
+
+.cast.right {
+  left: 75%;
+  transform: translateX(-50%);
+}
+
+/* Lighting a campfire: the bar filled by alternating the two triggers. */
+.lighting {
+  position: absolute;
+  bottom: calc(210px * var(--ui, 1));
+  width: min(300px, 34vw);
+  padding: calc(11px * var(--ui, 1)) calc(14px * var(--ui, 1));
+  border-radius: 12px;
+  background: rgba(10, 26, 36, 0.78);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.lighting.hidden {
+  display: none;
+}
+
+.lighting.left {
+  left: 25%;
+}
+
+.lighting.right {
+  left: 75%;
+}
+
+.lighting-title {
+  margin: 0 0 8px;
+  font-size: calc(11.5px * var(--ui, 1));
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #ffd98a;
+}
+
+.lighting-track {
+  height: calc(16px * var(--ui, 1));
+  padding: 2px;
+  border: 1px solid rgba(233, 247, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(10, 34, 46, 0.62);
+}
+
+.lighting-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff8a3c, #ffd76a);
+}
+
+/* Warm when nearly there, red when it is slipping away. */
+.lighting-fill.low {
+  background: linear-gradient(90deg, #d94b3d, #e2886a);
+}
+
+.lighting-hint {
+  margin: 8px 0 0;
+  font-size: calc(12px * var(--ui, 1));
+  color: #9db8c6;
+}
+
+.lighting-hint b {
+  color: #ffd98a;
+}
+
+/* Cooking by hand: how far through the cook the fish is, and the beat its turns have
+   to land on. */
+.cooking {
+  position: absolute;
+  bottom: calc(210px * var(--ui, 1));
+  width: min(300px, 34vw);
+  padding: calc(11px * var(--ui, 1)) calc(14px * var(--ui, 1));
+  border-radius: 12px;
+  background: rgba(10, 26, 36, 0.78);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.cooking.hidden {
+  display: none;
+}
+
+.cooking.left {
+  left: 25%;
+}
+
+.cooking.right {
+  left: 75%;
+}
+
+.cooking-title {
+  margin: 0 0 8px;
+  font-size: calc(11.5px * var(--ui, 1));
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #ffd98a;
+}
+
+.cooking-progress {
+  height: calc(5px * var(--ui, 1));
+  margin: 0 0 8px;
+  border-radius: 999px;
+  background: rgba(10, 34, 46, 0.62);
+  overflow: hidden;
+}
+
+/* Fills toward done as the fish cooks, so the end of the game is in sight. */
+.cooking-bar {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(255, 170, 84, 0.9), rgba(255, 232, 150, 0.95));
+  transition: width 90ms linear;
+}
+
+.cooking-clock {
+  margin-left: 6px;
+  color: #9db8c6;
+  letter-spacing: 0.04em;
+}
+
+.cooking-track {
+  position: relative;
+  height: calc(18px * var(--ui, 1));
+  padding: 2px;
+  border: 1px solid rgba(233, 247, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(10, 34, 46, 0.62);
+}
+
+/* The band to hit: warm, like the coals it is sitting over. */
+.cooking-zone {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 150, 62, 0.55), rgba(255, 226, 138, 0.85));
+  box-shadow: 0 0 8px rgba(255, 200, 110, 0.35);
+}
+
+.cooking-marker {
+  position: absolute;
+  top: calc(-2px * var(--ui, 1));
+  bottom: calc(-2px * var(--ui, 1));
+  width: calc(3px * var(--ui, 1));
+  margin-left: calc(-1.5px * var(--ui, 1));
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
+}
+
+/* Burnt edges a fish has left: one dot goes out per mistake. */
+.cooking-chances {
+  display: flex;
+  gap: calc(5px * var(--ui, 1));
+  margin: 8px 0 0;
+}
+
+.cooking-chances span {
+  width: calc(8px * var(--ui, 1));
+  height: calc(8px * var(--ui, 1));
+  border-radius: 50%;
+  background: #9ff2c8;
+  box-shadow: 0 0 6px rgba(159, 242, 200, 0.45);
+}
+
+.cooking-chances span.spent {
+  background: #4a3129;
+  box-shadow: none;
+}
+
+.cooking-hint {
+  margin: 8px 0 0;
+  font-size: calc(12px * var(--ui, 1));
+  color: #9db8c6;
+}
+
+.cooking-hint b {
+  color: #ffd98a;
+}
+
+.cooking-result {
+  margin: 6px 0 0;
+  min-height: calc(15px * var(--ui, 1));
+  font-size: calc(12px * var(--ui, 1));
+  font-weight: 600;
+}
+
+.cooking-result.hit {
+  color: #9ff2c8;
+}
+
+.cooking-result.miss {
+  color: #ff9a86;
+}
+
+.cooking-result.burn {
+  color: #ff6a4a;
+  font-weight: 700;
+}
+
+.cast-track {
+  height: calc(16px * var(--ui, 1));
+  padding: 2px;
+  border: 1px solid rgba(233, 247, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(10, 34, 46, 0.62);
+  overflow: hidden;
+}
+
+.cast-fill {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #8fe6ff, #ffd98a 68%, #ff6a5c);
+}
+
+.cast-label {
+  margin: calc(6px * var(--ui, 1)) 0 0;
+  text-align: center;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: calc(11px * var(--ui, 1));
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #eaf7ff;
+  text-shadow: 0 1px 3px rgba(6, 24, 34, 0.8);
+}
+
+/* Death: covers one player's half until they choose to respawn. */
+.death {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: radial-gradient(
+    circle at 50% 45%,
+    rgba(96, 12, 20, 0.72),
+    rgba(8, 6, 10, 0.93)
+  );
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  color: #ffd9d2;
+  pointer-events: none;
+}
+
+.death.hidden {
+  display: none;
+}
+
+.death.left {
+  left: 0;
+}
+
+.death.right {
+  right: 0;
+}
+
+.death-card {
+  padding: 0 24px;
+}
+
+.death h2 {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #ff6a5c;
+  text-shadow: 0 2px 18px rgba(255, 60, 40, 0.45);
+}
+
+.death-sub {
+  margin: 8px 0 26px;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: #e7b6ae;
+}
+
+.death-key {
+  display: inline-block;
+  margin: 0;
+  padding: 9px 18px;
+  border: 1px solid rgba(255, 217, 210, 0.35);
+  border-radius: 999px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  animation: death-pulse 1.8s ease-in-out infinite;
+}
+
+.death-key b {
+  color: #fff;
+}
+
+@keyframes death-pulse {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Item icons sit inside the slot; the rod is a diagonal blank with its reel. */
+.slot-icon {
+  position: absolute;
+  inset: calc(4px * var(--ui, 1));
+  border-radius: calc(3px * var(--ui, 1));
+  pointer-events: none;
+}
+
+/* The rod, drawn the way the model looks: a faceted brown blank angled up to the
+   right, the reel and its crank hanging under the grip, and the line dropping from the
+   tip to a red-and-cream float with a hook under it. */
+.slot-icon.fishing_rod {
+  inset: calc(7px * var(--ui, 1)) calc(3px * var(--ui, 1));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 20'%3E%3Cpath d='M25.2 1.9 L28.6 8.6' stroke='%23ece5d5' stroke-width='1.1' fill='none'/%3E%3Cpath d='M1 18.4 L2.6 19.4 L14.4 11.6 L13 10.2 Z' fill='%239c5f31'/%3E%3Cpath d='M13 10.2 L14.4 11.6 L25.4 2.4 L24.8 1.3 Z' fill='%23b3713c'/%3E%3Cpath d='M13.4 10.2 L24.9 1.6 L25.3 2.2 L13.8 10.8 Z' fill='%23c6844a'/%3E%3Crect x='24.2' y='0.9' width='2.2' height='2' fill='%23b3713c'/%3E%3Ccircle cx='11.8' cy='13.2' r='3' fill='%23b3713c'/%3E%3Ccircle cx='11.8' cy='13.2' r='3' fill='none' stroke='%23c6844a' stroke-width='0.6'/%3E%3Ccircle cx='11.8' cy='13.2' r='1' fill='%236f3f1f'/%3E%3Cpath d='M10.6 15.8 L8.8 17 L9.7 18 L11.5 16.8 Z' fill='%239c5f31'/%3E%3Crect x='7.9' y='16.7' width='1.7' height='2.1' fill='%238f552c'/%3E%3Cpath d='M26.2 8.6 L31.2 8.6 L30.3 11 L27.1 11 Z' fill='%23e04b39'/%3E%3Cpath d='M27.1 11 L30.3 11 L29.4 13.2 L28 13.2 Z' fill='%23efe7d8'/%3E%3Cpath d='M28.7 13.2 L28.7 15.6 Q28.7 16.9 27.5 16.9 Q26.4 16.9 26.4 15.7' stroke='%23c9c0b0' stroke-width='1.1' fill='none'/%3E%3Cpath d='M26.4 15.7 L27.5 15.9' stroke='%23c9c0b0' stroke-width='1' fill='none'/%3E%3C/svg%3E");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+/* The fish icons are drawn from the same boxes the models are built from, so a slot
+   shows the shape you actually hold: a stepped head, body and rear, the dark back band
+   and pale belly band, the small dorsal fin, the two-point tail fan, the square eye at
+   the snout and the speckles across the flank. Colours come straight from each stage's
+   material set. Shared with the catching minigame so both read as the same fish. */
+.slot-icon.fish,
+.slot-icon.cooked_fish,
+.slot-icon.burned_fish,
+.catch-fish {
+  border: 1px solid rgba(8, 26, 36, 0.45);
+  border-radius: 2px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.slot-icon.fish,
+.slot-icon.cooked_fish,
+/* Burned: the charred fish render from assets/burntfish_icon.png. A smooth render
+   like the cooked one, so it scales smoothly; same box and no outline ring as the
+   other two stages so cooked-to-burned swaps sit identically in the slot. */
+.slot-icon.burned_fish {
+  background-image: url('../assets/burntfish_icon.png');
+  border: none;
+}
+
+/* The sprite is 22x14, so its box is sized to hold it at exactly one pixel per sprite
+   pixel rather than squeezing it into a fish-shaped sliver. The raw fish shows no
+   outline ring: its sprite carries its own edges, so the shared 1px icon border is
+   switched off for this stage only. */
+.slot-icon.fish {
+  inset: calc(7px * var(--ui, 1)) calc(3px * var(--ui, 1));
+  border: none;
+}
+
+/* The fish is pixel art from assets/fish_sprite.png: one sprite pixel per CSS pixel,
+   with pixelated sampling so a whole-number size stays crisp instead of being
+   resampled into mush. */
+.slot-icon.fish,
+.catch-fish {
+  background-image: url('../assets/fish_sprite.png');
+  image-rendering: pixelated;
+  background-size: calc(22px * var(--ui, 1)) calc(14px * var(--ui, 1));
+}
+
+/* Cooked: the same fish with every material swapped for its browned twin. */
+/* Cooked: the browned fish render from assets/cookedfish_icon.png. A smooth render
+   like the campfire, so it scales smoothly; same box and no outline ring as the raw
+   fish so the raw-to-cooked swap sits identically in the slot. */
+.slot-icon.cooked_fish {
+  background-image: url('../assets/cookedfish_icon.png');
+  border: none;
+}
+
+/* Burned: charred all through, lifted just enough off the slot floor to still read. */
+.slot-icon.burned_fish {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 20'%3E%3Crect x='3' y='4.5' width='6.5' height='11' fill='%2363524a'/%3E%3Crect x='9.5' y='3' width='8' height='14' fill='%2363524a'/%3E%3Crect x='17.5' y='4.5' width='6' height='11' fill='%2363524a'/%3E%3Crect x='23.5' y='6.5' width='3' height='7' fill='%233a2f2a'/%3E%3Crect x='5' y='13' width='16' height='2.5' fill='%238a7466'/%3E%3Crect x='10' y='2.6' width='10' height='2.4' fill='%233a2f2a'/%3E%3Cpath d='M26.5 10 L32 1.5 L32 18.5 Z' fill='%2373604f'/%3E%3Cpath d='M26.5 10 L32 6.5 L32 13.5 Z' fill='%233f332d'/%3E%3Cpath d='M12.5 3 L14.5 0 L17 3 Z' fill='%2373604f'/%3E%3Crect x='4.6' y='6.6' width='2.4' height='2.4' fill='%23140f0d'/%3E%3Crect x='3.4' y='10.6' width='1.8' height='1.3' fill='%233a2f2a'/%3E%3Crect x='12' y='8.6' width='1.8' height='1.8' fill='%238a7466'/%3E%3Crect x='15.8' y='10.8' width='1.6' height='1.6' fill='%238a7466'/%3E%3Crect x='19.2' y='6.8' width='1.6' height='1.6' fill='%233a2f2a'/%3E%3C/svg%3E");
+}
+
+/* Stack count, bottom right of a slot; blank for single items. */
+.slot-count {
+  position: absolute;
+  right: calc(2px * var(--ui, 1));
+  bottom: calc(1px * var(--ui, 1));
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: calc(10px * var(--ui, 1));
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(6, 24, 34, 0.9);
+  pointer-events: none;
+}
+
+/* Crossed twigs, matching the sticks lying around the island. */
+/* The stick is the 3D twig render from assets/stick_icon.png: a smooth render
+   rather than pixel art, so it is scaled smoothly instead of pixelated. */
+.slot-icon.stick {
+  background-image: url('../assets/stick_icon.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+/* A short baulk of trunk with pale cut ends and a snapped branch. */
+.slot-icon.log {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 20'%3E%3Crect x='2' y='7' width='24' height='7' rx='2.5' fill='%236b4a2f'/%3E%3Crect x='24' y='6' width='6' height='9' rx='3' fill='%23c9a26b'/%3E%3Ccircle cx='27' cy='10.5' r='2.4' fill='%23a97f4e'/%3E%3Cpath d='M6 8.2 L14 8.2 M8 12.4 L20 12.4' stroke='%234b3421' stroke-width='1'/%3E%3Cpath d='M10 7 L12 4 L13 7 Z' fill='%234b3421'/%3E%3C/svg%3E");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+/* Durability of a unique tool: a thin bar along the bottom of its slot. */
+.slot-durability {
+  position: absolute;
+  left: calc(4px * var(--ui, 1));
+  right: calc(4px * var(--ui, 1));
+  bottom: calc(3px * var(--ui, 1));
+  height: calc(3px * var(--ui, 1));
+  border-radius: 999px;
+  background: rgba(8, 26, 36, 0.6);
+  pointer-events: none;
+}
+
+.slot-durability-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #a8e6a0;
+}
+
+/* Nearly worn out. */
+.slot-durability-fill.low {
+  background: #e2886a;
+}
+
+/* The kindling is the 3D shredded-bark render from assets/kindling_icon.png: a
+   smooth render rather than pixel art, so it is scaled smoothly instead of pixelated. */
+.slot-icon.kindling {
+  background-image: url('../assets/kindling_icon.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+/* Ring of grey stones with a flame over it. */
+/* The campfire icon is the 3D campfire from assets/campfire_icon.png: a smooth
+   render rather than pixel art, so it is scaled smoothly instead of pixelated. */
+.slot-icon.campfire {
+  background-image: url('../assets/campfire_icon.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+/* A loose grey rock: two overlapping facets, light top-left and darker body. */
+/* The rock is the 3D stone render from assets/rock_icon.png: a smooth render
+   rather than pixel art, so it is scaled smoothly instead of pixelated. */
+/* The rock is pixel art from assets/rock_icon.png: the true 10x9 sprite with its
+   black backdrop keyed out, drawn at two CSS pixels per sprite pixel so it fills
+   the slot while staying crisp. */
+.slot-icon.rock {
+  inset: calc(5px * var(--ui, 1)) calc(4px * var(--ui, 1));
+  background-image: url('../assets/rock_icon.png');
+  image-rendering: pixelated;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: calc(20px * var(--ui, 1)) calc(18px * var(--ui, 1));
+}
+
+/* A stone flake lashed to a handle, from assets/simpletool_icon.png: a smooth
+   render rather than pixel art, so it is scaled smoothly instead of pixelated. */
+.slot-icon.simple_tool {
+  background-image: url('../assets/simpletool_icon.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+/* A bundle of green blades tied at the middle, from assets/fiber_icon.png: a smooth
+   render rather than pixel art, so it is scaled smoothly instead of pixelated. */
+.slot-icon.fiber {
+  background-image: url('../assets/fiber_icon.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+/* A stone head bound to a long haft, from assets/axe_icon.png: a smooth render
+   rather than pixel art, so it is scaled smoothly instead of pixelated. */
+.slot-icon.rugged_axe {
+  background-image: url('../assets/axe_icon.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.slot.selected {
+  border-color: #ffd98a;
+  background: rgba(255, 217, 138, 0.16);
+  box-shadow: 0 0 0 1px rgba(255, 217, 138, 0.45);
+}
