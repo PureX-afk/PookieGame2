@@ -3,6 +3,10 @@
       "videogamemcp.com": {
       "url": "https://sse.videogamemcp.com/sse",
       "enabled": true
+      },
+      "soundza": {
+      "url": "https://mcp.soundza.com/mcp/oauth",
+      "enabled": true
       }
     },
     "mcp": {
@@ -10,6 +14,10 @@
         "videogamemcp.com": {
           "type": "remote",
           "url": "https://sse.videogamemcp.com/sse"
+        },
+        "soundza": {
+          "type": "remote",
+          "url": "https://mcp.soundza.com/mcp/oauth"
         },
         "mcp-game-builder": {
           "type": "local",
