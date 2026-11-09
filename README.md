@@ -13,7 +13,7 @@ about GitHub, or about computers, to do this.
 
 1. Near the top of this page there is a green button that says **Code**. Click it.
 2. A small menu drops down. Click **Download ZIP** at the bottom of it.
-3. A file called `Pookies_game-main.zip` now downloads. Normally you will see it appear
+3. A file called `PookieGame2-main.zip` now downloads. Normally you will see it appear
    in the top-right of your browser, or in your **Downloads** folder. Wait for it to
    finish downloading.
 
@@ -24,10 +24,10 @@ about GitHub, or about computers, to do this.
 The game arrives squashed into one file and has to be opened out. Do not skip this step.
 
 1. Open your **Downloads** folder.
-2. Find the file called `Pookies_game-main.zip`. **Right-click** it.
+2. Find the file called `PookieGame2-main.zip`. **Right-click** it.
 3. In the menu that appears, click **Extract All…**
 4. A small window opens showing a place to put the game. Click the **Extract** button.
-5. A new folder called `Pookies_game-main` appears. **The game is inside this folder** —
+5. A new folder called `PookieGame2-main` appears. **The game is inside this folder** —
    keep the folder where it is. If you delete it, the game is gone.
 
 ---
@@ -53,7 +53,7 @@ to install it once, and then never think about it again.
 
 ## Step 4 — Start the game
 
-1. Open the `Pookies_game-main` folder you made in Step 2.
+1. Open the `PookieGame2-main` folder you made in Step 2.
 2. Inside it you will see a file called **run** (its full name may show as `run.bat`).
    **Double-click it.**
 3. A small black window appears and then hides itself down in your taskbar. That is
